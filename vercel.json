@@ -5,18 +5,23 @@
   ],
   "env": {
     "VITE_CORS_PROXY_URL": "/api/proxy?url=",
+    "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
+    "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
     "DEBUG": "true"
   },
   "build": {
     "env": {
       "VITE_CORS_PROXY_URL": "/api/proxy?url=",
+      "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
+      "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
       "DEBUG": "true"
     }
   },
   "functions": {
     "api/proxy.js": {
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 60,
+      "runtime": "nodejs18.x"
     }
   },
   "headers": [
