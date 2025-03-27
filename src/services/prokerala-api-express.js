@@ -69,8 +69,20 @@ export const normalizeTimeFormat = (timeStr) => {
 export const getCoordinates = async (placeName) => {
   try {
     logger.debug('Geocoding place:', placeName);
-    const response = await axios.get(getFullApiUrl(API_ENDPOINTS.GEOCODE), {
-      params: { q: placeName }
+    
+    // Instead of going through our API server, call OpenStreetMap API directly
+    const response = await axios({
+      method: 'GET',
+      url: `https://nominatim.openstreetmap.org/search`,
+      params: {
+        q: placeName,
+        format: 'json'
+      },
+      headers: {
+        'User-Agent': 'AstroInsights/1.0',
+        'Accept': 'application/json',
+        'Accept-Language': 'en'
+      }
     });
     
     if (response.data && response.data.length > 0) {
@@ -126,39 +138,32 @@ export const getProkeralaToken = async () => {
 /**
  * Interface for the processed birth chart data
  */
-export interface BirthChartData {
+/* eslint-disable */
+export const BirthChartData = {
   sun: {
-    sign: string;
-    position: number;
-  };
+    sign: "",
+    position: 0
+  },
   moon: {
-    sign: string;
-    position: number;
-  };
+    sign: "",
+    position: 0
+  },
   ascendant: {
-    sign: string;
-    position: number;
-  };
-  planets: Array<{
-    name: string;
-    sign: string;
-    position: number;
-    isRetrograde: boolean;
-    house?: number | null;
-  }>;
-  houses?: Array<{
-    number: number;
-    sign: string;
-    lord: string;
-    planets: string[];
-  }>;
-}
+    sign: "",
+    position: 0
+  },
+  planets: [],
+  houses: []
+};
+/* eslint-enable */
 
 /**
  * Fetches mock birth chart data based on birth date
  * Used as a fallback when API calls fail
+ * @param {Object} birthData - The birth data with date, time, and place
+ * @returns {Object} The mock birth chart data
  */
-export const getMockBirthChart = (birthData: BirthData): BirthChartData => {
+export const getMockBirthChart = (birthData) => {
   // Determine approximate sun sign based on date
   const date = new Date(birthData.date);
   const month = date.getMonth() + 1;
@@ -248,10 +253,10 @@ export const getMockBirthChart = (birthData: BirthData): BirthChartData => {
 
 /**
  * Fetches accurate birth chart data from Prokerala API via our Express server
- * @param birthData The birth data with date, time, and place
- * @returns Promise with the birth chart data
+ * @param {Object} birthData The birth data with date, time, and place
+ * @returns {Promise<Object>} Promise with the birth chart data
  */
-export const getBirthChart = async (birthData: BirthData): Promise<BirthChartData> => {
+export const getBirthChart = async (birthData) => {
   try {
     logger.debug('Getting birth chart for:', birthData);
     

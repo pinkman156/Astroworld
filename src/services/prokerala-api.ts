@@ -150,18 +150,27 @@ const normalizeTimeFormat = (timeStr: string): string => {
  */
 export const getCoordinates = async (place: string): Promise<string> => {
   try {
-    // Will be handled by Express server
+    // Call OpenStreetMap API directly
     const response = await axios({
       method: 'GET',
-      url: `/api/geocode?place=${encodeURIComponent(place)}`,
+      url: `https://nominatim.openstreetmap.org/search`,
+      params: {
+        q: place,
+        format: 'json'
+      },
+      headers: {
+        'User-Agent': 'AstroInsights/1.0',
+        'Accept': 'application/json',
+        'Accept-Language': 'en'
+      }
     });
     
-    if (response.data && response.data.latitude && response.data.longitude) {
-      const latitude = parseFloat(response.data.latitude);
-      const longitude = parseFloat(response.data.longitude);
+    if (response.data && response.data.length > 0) {
+      // Get the first result
+      const location = response.data[0];
       
       // Format as required by Prokerala API v2: "lat,lng"
-      return `${latitude.toFixed(3)},${longitude.toFixed(3)}`;
+      return `${location.lat},${location.lon}`;
     }
     
     throw new Error(`Location "${place}" not found in geocoding service`);
