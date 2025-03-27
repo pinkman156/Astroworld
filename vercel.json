@@ -1,11 +1,8 @@
 {
   "version": 2,
   "public": true,
-  "rewrites": [
-    { "source": "/api/proxy", "destination": "/api/proxy" }
-  ],
+  "rewrites": [],
   "env": {
-    "VITE_CORS_PROXY_URL": "/api/proxy?url=",
     "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
     "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
     "VITE_TOGETHER_API_KEY": "${VITE_TOGETHER_API_KEY}",
@@ -13,7 +10,6 @@
   },
   "build": {
     "env": {
-      "VITE_CORS_PROXY_URL": "/api/proxy?url=",
       "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
       "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
       "VITE_TOGETHER_API_KEY": "${VITE_TOGETHER_API_KEY}",
@@ -21,11 +17,6 @@
     }
   },
   "functions": {
-    "api/proxy.js": {
-      "memory": 1024,
-      "maxDuration": 60,
-      "runtime": "@vercel/node@3.0.5"
-    },
     "api/*.js": {
       "memory": 1024,
       "maxDuration": 60,
