@@ -16,6 +16,9 @@ TOGETHER_API_KEY=fa8c8812d0201d189bba52553de37dec1951010b1e1478ab4380bf2dc7df41a
 VITE_PROKERALA_CLIENT_ID=ebc3a614-d4f3-465d-b7bf-e4ae3ea3667e
 VITE_PROKERALA_CLIENT_SECRET=Hx7OuIF7ckiXixP2uVlrquB64Zfg73kVn115qowY
 VITE_TOGETHER_API_KEY=fa8c8812d0201d189bba52553de37dec1951010b1e1478ab4380bf2dc7df41a9
+
+# Base URL for API calls
+VITE_API_BASE_URL=https://astroworld-delta.vercel.app
 ```
 
 ## 2. Prokerala API Configuration
@@ -25,7 +28,7 @@ Update your Prokerala API settings in the Prokerala developer dashboard:
 ### Authorized JavaScript Origins
 Add these URLs:
 ```
-http://localhost:5176,https://astroworld-nine.vercel.app
+http://localhost:5176,https://astroworld-delta.vercel.app
 ```
 
 ## 3. Deployment Settings
@@ -43,13 +46,13 @@ Once deployed, test your API endpoints:
 
 ```bash
 # Test Prokerala token endpoint
-curl -X POST "https://astroworld-nine.vercel.app/api/prokerala-proxy/token"
+curl -X POST "https://astroworld-delta.vercel.app/api/prokerala-proxy/token"
 
 # Test geocoding
-curl -X GET "https://astroworld-nine.vercel.app/api/geocode?q=New%20York"
+curl -X GET "https://astroworld-delta.vercel.app/api/geocode?q=New%20York"
 
 # Test Together AI endpoint (substitute with appropriate values)
-curl -X POST "https://astroworld-nine.vercel.app/api/together/chat" \
+curl -X POST "https://astroworld-delta.vercel.app/api/together/chat" \
   -H "Content-Type: application/json" \
   -d '{"model":"mistralai/Mixtral-8x7B-Instruct-v0.1","messages":[{"role":"system","content":"You are an astrologer."},{"role":"user","content":"Quick reading for someone born Jan 1, 1990"}],"temperature":0.7,"max_tokens":100}'
 ```

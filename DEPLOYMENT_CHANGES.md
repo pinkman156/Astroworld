@@ -8,19 +8,10 @@ Updated `vercel.json` to properly route API requests to serverless functions:
 
 ```json
 {
-  "routes": [
-    {
-      "src": "/api/prokerala-proxy/(.*)",
-      "dest": "/api/prokerala-proxy.js"
-    },
-    {
-      "src": "/api/geocode",
-      "dest": "/api/geocode.js"
-    },
-    {
-      "src": "/api/together/chat",
-      "dest": "/api/together-chat.js"
-    }
+  "rewrites": [
+    { "source": "/api/prokerala-proxy/:path*", "destination": "/api/prokerala-proxy.js" },
+    { "source": "/api/geocode", "destination": "/api/geocode.js" },
+    { "source": "/api/together/chat", "destination": "/api/together-chat.js" }
   ]
 }
 ```
@@ -39,6 +30,9 @@ VITE_PROKERALA_CLIENT_SECRET=Hx7OuIF7ckiXixP2uVlrquB64Zfg73kVn115qowY
 # Together AI API Key
 TOGETHER_API_KEY=fa8c8812d0201d189bba52553de37dec1951010b1e1478ab4380bf2dc7df41a9
 VITE_TOGETHER_API_KEY=fa8c8812d0201d189bba52553de37dec1951010b1e1478ab4380bf2dc7df41a9
+
+# API Base URL
+VITE_API_BASE_URL=https://astroworld-delta.vercel.app
 ```
 
 ## 3. API Service Configuration
@@ -75,12 +69,14 @@ Enhanced the serverless functions with better error handling and environment var
 3. Updated `api/geocode.js` with:
    - Improved logging for debugging
    - Better error details
+   - Added caching and retry mechanisms
+   - Enhanced User-Agent headers to comply with Nominatim requirements
 
 ## 5. Prokerala API Configuration
 
 Updated the Authorized JavaScript Origins to include:
 ```
-http://localhost:5176,https://astroworld-nine.vercel.app
+http://localhost:5176,https://astroworld-delta.vercel.app
 ```
 
 ## 6. Build Configuration

@@ -120,19 +120,33 @@ class ApiService {
     
     try {
       // Get geocoding data for the place
-      const geocodeResponse = await this.client.get('/api/geocode', {
-        params: { q: birthData.place }
-      });
+      console.log(`Attempting to geocode: ${birthData.place}`);
+      let location;
+      let coordinates;
       
-      if (!geocodeResponse.data || geocodeResponse.data.length === 0) {
+      try {
+        const geocodeResponse = await this.client.get('/api/geocode', {
+          params: { q: birthData.place }
+        });
+        
+        if (!geocodeResponse.data || geocodeResponse.data.length === 0) {
+          console.warn(`Location not found: ${birthData.place}`);
+          return {
+            success: false,
+            error: 'Location not found. Please enter a valid city or place.'
+          };
+        }
+        
+        location = geocodeResponse.data[0];
+        coordinates = `${location.lat},${location.lon}`;
+        console.log(`Geocoded ${birthData.place} to coordinates ${coordinates}`);
+      } catch (geocodeError: any) {
+        console.error(`Geocoding error for ${birthData.place}:`, geocodeError);
         return {
           success: false,
-          error: 'Location not found. Please enter a valid city or place.'
+          error: `Unable to find "${birthData.place}". The geocoding service may be unavailable. Please try a different location or try again later.`
         };
       }
-      
-      const location = geocodeResponse.data[0];
-      const coordinates = `${location.lat},${location.lon}`;
       
       // Format date and time for API request
       const [year, month, day] = birthData.date.split('-');
@@ -145,7 +159,7 @@ class ApiService {
       const chartResponse = await this.client.get('/api/prokerala-proxy/chart', {
         params: {
           datetime: formattedDateTime,
-          coordinates: coordinates,
+          coordinates,
           ayanamsa: 1 // Lahiri ayanamsa
         },
         headers: {
@@ -177,7 +191,7 @@ class ApiService {
       const response: ApiResponse = {
         success: true,
         data: {
-          insight: insight
+          insight
         }
       };
       
@@ -187,9 +201,25 @@ class ApiService {
       return response;
     } catch (error: any) {
       console.error('Error generating astrological insight:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to generate astrological insight.';
+      
+      if (error.error) {
+        errorMessage = error.error;
+      } else if (error.message) {
+        if (error.message.includes('timeout')) {
+          errorMessage = 'The request timed out. Please try again later.';
+        } else if (error.message.includes('Network Error')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
       return {
         success: false,
-        error: error.error || 'Failed to generate astrological insight.'
+        error: errorMessage
       };
     }
   }

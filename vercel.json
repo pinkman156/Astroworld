@@ -20,7 +20,7 @@
     { "source": "/(.*)", "destination": "/$1" }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://astroworld-nine.vercel.app"
+    "VITE_API_BASE_URL": "https://astroworld-delta.vercel.app"
   },
   "github": {
     "silent": true
