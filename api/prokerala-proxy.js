@@ -180,31 +180,7 @@ async function prokeralaApiRequest(req, res, endpoint) {
       };
     }
     
-    // Additional validations for specific endpoints
-    if (endpoint === 'chart') {
-      if (!query.chart_type) {
-        return {
-          status: 400,
-          headers: corsHeaders,
-          body: { 
-            error: 'Missing required parameter: chart_type',
-            message: 'chart_type is required for chart endpoint. Example: {"name":"Rasi"}'
-          }
-        };
-      }
-      
-      if (!query.chart_style) {
-        return {
-          status: 400,
-          headers: corsHeaders,
-          body: { 
-            error: 'Missing required parameter: chart_style',
-            message: 'chart_style is required for chart endpoint. Example: "north-indian"'
-          }
-        };
-      }
-    }
-    
+    // Token validation
     if (!token) {
       return {
         status: 401,
@@ -213,56 +189,61 @@ async function prokeralaApiRequest(req, res, endpoint) {
       };
     }
     
-    // Fix any encoding issues with datetime
-    let decodedDatetime = query.datetime;
+    // CRITICAL FIX: Sanitize and format parameters for Prokerala API
     
+    // 1. Handle datetime parameter
+    let decodedDatetime = query.datetime;
     try {
-      // First decode any URL encoding
+      // Safely decode URI components
       try {
         decodedDatetime = decodeURIComponent(decodedDatetime);
       } catch (e) {
         console.warn('Error decoding datetime:', e.message);
       }
       
-      // Check if it contains space or + between T and timezone
-      if (decodedDatetime.includes('T')) {
-        // Remove any spaces between time and timezone that could cause issues
-        decodedDatetime = decodedDatetime.replace(/T(\d{2}:\d{2}(?::\d{2})?)(?:\s|\+)([+-]\d{2}:\d{2})/, 'T$1$2');
-      }
-      
-      // Handle spaces and plus signs
+      // Replace any '+' with ' ' (URL encoding issue)
       decodedDatetime = decodedDatetime.replace(/\+/g, ' ');
       
-      // For the chart endpoint, ensure ISO 8601 format with T and timezone
+      // For the chart endpoint
       if (endpoint === 'chart') {
-        // If the datetime doesn't have a 'T', add it (replacing space if needed)
+        // Ensure 'T' separator is used instead of space
         if (!decodedDatetime.includes('T')) {
           decodedDatetime = decodedDatetime.replace(' ', 'T');
         }
         
-        // Detect if timezone is already present
-        const hasTimezone = /T[\d:]+[+-][\d:]+$/.test(decodedDatetime);
+        // VERY IMPORTANT: Standardize the datetime without timezone for chart endpoint
+        // This prevents the "double time specification" error
+        // Strip any existing timezone information - the API adds IST by default
+        decodedDatetime = decodedDatetime.replace(/([T\s]\d{2}:\d{2}(:\d{2})?)([+-]\d{2}:\d{2})?.*$/, '$1');
         
-        // If there's no timezone specified, add IST (+05:30)
-        if (!hasTimezone) {
-          decodedDatetime += '+05:30';
+        // Make sure datetime is in correct format YYYY-MM-DDTHH:MM:SS
+        if (!decodedDatetime.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)) {
+          return {
+            status: 400,
+            headers: corsHeaders,
+            body: { 
+              error: 'Invalid datetime format',
+              message: 'Datetime must be in format: YYYY-MM-DDTHH:MM:SS',
+              provided: decodedDatetime
+            }
+          };
         }
         
-        console.log('Converted to ISO 8601 format:', decodedDatetime);
+        // Ensure datetime has seconds part
+        if (!decodedDatetime.match(/:\d{2}$/)) {
+          decodedDatetime += ':00';
+        }
       } else {
-        // For other endpoints, use the standard format
-        // Replace any 'T' with a space for standard format
+        // For other endpoints, use the standard format with space
         if (decodedDatetime.includes('T')) {
           decodedDatetime = decodedDatetime.replace('T', ' ');
         }
         
-        // Remove timezone information if present
+        // Remove timezone if present
         decodedDatetime = decodedDatetime.replace(/[+-]\d{2}:\d{2}$/, '');
         
-        // Verify standard datetime format: YYYY-MM-DD HH:MM:SS
-        const standardDatetimeRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
-        if (!standardDatetimeRegex.test(decodedDatetime)) {
-          console.error('Invalid standard datetime format after decoding:', decodedDatetime);
+        // Verify format
+        if (!decodedDatetime.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/)) {
           return {
             status: 400,
             headers: corsHeaders,
@@ -274,7 +255,7 @@ async function prokeralaApiRequest(req, res, endpoint) {
           };
         }
         
-        // Ensure the datetime ends with seconds
+        // Ensure seconds
         if (!decodedDatetime.match(/:\d{2}$/)) {
           decodedDatetime += ':00';
         }
@@ -291,67 +272,118 @@ async function prokeralaApiRequest(req, res, endpoint) {
       };
     }
     
-    // Construct query parameters
+    // 2. Handle chart_type parameter (for chart endpoint)
+    let chartType = null;
+    if (endpoint === 'chart') {
+      if (!query.chart_type) {
+        return {
+          status: 400,
+          headers: corsHeaders,
+          body: { 
+            error: 'Missing required parameter: chart_type',
+            message: 'chart_type is required for chart endpoint. Example: {"name":"Rasi"}'
+          }
+        };
+      }
+      
+      // Ensure chart_type is valid JSON
+      try {
+        // If it's already an object, stringify it
+        if (typeof query.chart_type === 'object') {
+          chartType = JSON.stringify(query.chart_type);
+        } else {
+          // If it's a string, ensure it's valid JSON
+          const parsedType = JSON.parse(query.chart_type);
+          if (!parsedType.name) {
+            return {
+              status: 400,
+              headers: corsHeaders,
+              body: { 
+                error: 'Invalid chart_type format',
+                message: 'chart_type must be a JSON object with "name" property'
+              }
+            };
+          }
+          // Re-stringify to ensure proper format
+          chartType = JSON.stringify({ name: parsedType.name });
+        }
+      } catch (e) {
+        // If parsing fails, give clear error
+        return {
+          status: 400,
+          headers: corsHeaders,
+          body: { 
+            error: 'Invalid chart_type',
+            message: 'chart_type must be valid JSON. Example: {"name":"Rasi"}',
+            provided: query.chart_type
+          }
+        };
+      }
+      
+      // 3. Validate chart_style
+      if (!query.chart_style) {
+        return {
+          status: 400,
+          headers: corsHeaders,
+          body: { 
+            error: 'Missing required parameter: chart_style',
+            message: 'chart_style is required for chart endpoint. Example: "north-indian"'
+          }
+        };
+      }
+    }
+    
+    // Construct the final parameters
     const params = {
       datetime: decodedDatetime,
       coordinates: query.coordinates,
       ayanamsa: query.ayanamsa || 1
     };
     
-    // Properly handle chart_type for the chart endpoint
+    // Add chart-specific parameters
     if (endpoint === 'chart') {
-      // For chart_type, ensure it's a valid JSON string
-      if (query.chart_type) {
-        try {
-          // Try to parse as JSON to check if valid
-          const typeObj = typeof query.chart_type === 'string' 
-            ? JSON.parse(query.chart_type) 
-            : query.chart_type;
-          
-          // Create a clean version with just the name property
-          params.chart_type = JSON.stringify({ name: typeObj.name || "Rasi" });
-        } catch (e) {
-          // If parsing fails, use default
-          console.warn('Error parsing chart_type, using default:', e.message);
-          params.chart_type = JSON.stringify({ name: "Rasi" });
-        }
-      } else {
-        params.chart_type = JSON.stringify({ name: "Rasi" });
-      }
-      
-      // Add chart_style
-      params.chart_style = query.chart_style || 'north-indian';
+      params.chart_type = chartType;
+      params.chart_style = query.chart_style;
     }
     
     console.log(`Making ${endpoint} request to Prokerala API with params:`, params);
     
     // Make request to Prokerala API
-    const response = await axios({
-      method: 'GET',
-      url: `https://api.prokerala.com/v2/astrology/${endpoint}`,
-      params,
-      headers: {
-        'Authorization': `Bearer ${token}`
+    try {
+      const response = await axios({
+        method: 'GET',
+        url: `https://api.prokerala.com/v2/astrology/${endpoint}`,
+        params,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      return {
+        status: 200,
+        headers: corsHeaders,
+        body: response.data
+      };
+    } catch (apiError) {
+      console.error(`Error from Prokerala API (${endpoint}):`, apiError.message);
+      
+      // Forward the error response from Prokerala
+      if (apiError.response) {
+        console.error('Prokerala API error details:', 
+          apiError.response.status, 
+          JSON.stringify(apiError.response.data, null, 2)
+        );
+        return {
+          status: apiError.response.status,
+          headers: corsHeaders,
+          body: apiError.response.data
+        };
       }
-    });
-    
-    return {
-      status: 200,
-      headers: corsHeaders,
-      body: response.data
-    };
+      
+      throw apiError; // Re-throw for outer catch block
+    }
   } catch (error) {
     console.error(`Prokerala ${endpoint} error:`, error.message);
-    
-    // Forward the error response from Prokerala
-    if (error.response) {
-      console.error('Prokerala API error response:', error.response.status, error.response.data);
-      return {
-        status: error.response.status,
-        headers: corsHeaders,
-        body: error.response.data
-      };
-    }
     
     return {
       status: 500,
@@ -366,6 +398,11 @@ async function prokeralaApiRequest(req, res, endpoint) {
 
 // Main request handler for serverless function
 export default async function handler(req, res) {
+  // Return early for OPTIONS requests (CORS preflight)
+  if (req.method === 'OPTIONS') {
+    return handleOptions(req, res);
+  }
+  
   // Log the incoming request for debugging
   console.log('Prokerala proxy request received:', {
     url: req.url,
@@ -374,11 +411,6 @@ export default async function handler(req, res) {
     query: req.query,
     body: req.method === 'POST' ? 'POST data present' : 'No POST data'
   });
-  
-  // Return early for OPTIONS requests (CORS preflight)
-  if (req.method === 'OPTIONS') {
-    return handleOptions(req, res);
-  }
   
   // Check rate limit
   const rateLimitError = checkRateLimit(req, res);
@@ -431,6 +463,88 @@ export default async function handler(req, res) {
         region: process.env.VERCEL_REGION || 'unknown'
       }
     });
+  }
+  
+  // Add debug endpoint
+  if (path === 'debug') {
+    // This endpoint just shows how the parameters are being processed without calling the actual API
+    try {
+      const { query } = req;
+      console.log('Debug request with query:', query);
+      
+      // Process chart_type parameter
+      let processedChartType = null;
+      if (query.chart_type) {
+        try {
+          // If it's an object, stringify it
+          if (typeof query.chart_type === 'object') {
+            processedChartType = JSON.stringify(query.chart_type);
+          } else {
+            // If it's a string, ensure it's valid JSON
+            const parsed = JSON.parse(query.chart_type);
+            processedChartType = JSON.stringify(parsed);
+          }
+        } catch (e) {
+          processedChartType = `Error parsing: ${e.message}`;
+        }
+      }
+      
+      // Process datetime parameter
+      let processedDatetime = null;
+      if (query.datetime) {
+        try {
+          // First decode any URL encoding
+          const decodedDatetime = decodeURIComponent(query.datetime);
+          
+          // Replace any '+' with ' ' (URL encoding issue)
+          const withoutPlus = decodedDatetime.replace(/\+/g, ' ');
+          
+          // Convert space to 'T' if needed for ISO format
+          let iso = withoutPlus;
+          if (!iso.includes('T')) {
+            iso = iso.replace(' ', 'T');
+          }
+          
+          // Strip timezone info
+          const withoutTZ = iso.replace(/([T\s]\d{2}:\d{2}(:\d{2})?)([+-]\d{2}:\d{2})?.*$/, '$1');
+          
+          processedDatetime = {
+            original: query.datetime,
+            decoded: decodedDatetime,
+            withoutPlus, 
+            iso,
+            withoutTZ
+          };
+        } catch (e) {
+          processedDatetime = `Error processing: ${e.message}`;
+        }
+      }
+      
+      return res.status(200).json({
+        debug: true,
+        originalRequest: {
+          url: req.url,
+          query: req.query,
+          headers: req.headers
+        },
+        processedParams: {
+          chart_type: {
+            original: query.chart_type,
+            processed: processedChartType
+          },
+          datetime: processedDatetime,
+          coordinates: query.coordinates,
+          ayanamsa: query.ayanamsa,
+          chart_style: query.chart_style
+        },
+        info: "This is a debug endpoint that shows how parameters are processed without calling the actual API"
+      });
+    } catch (error) {
+      return res.status(500).json({
+        error: 'Debug error',
+        message: error.message || 'An error occurred during debugging'
+      });
+    }
   }
   
   // Route to the appropriate handler

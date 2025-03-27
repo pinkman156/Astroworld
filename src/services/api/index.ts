@@ -244,53 +244,54 @@ class ApiService {
       // Get a fresh token
       const token = await this.getProkeralaToken();
       
-      // IMPORTANT: Fix for datetime format requirements
-      if (params.datetime && endpoint === 'chart') {
-        // Convert to ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)
-        try {
-          // First ensure any URL encoding is properly handled
-          params.datetime = decodeURIComponent(params.datetime);
-          
-          // Check if the datetime already has timezone information
-          const hasTimezone = params.datetime.match(/[+-]\d{2}:\d{2}$/);
-          
-          // Convert space to 'T' if needed
-          if (params.datetime.includes(' ') && !params.datetime.includes('T')) {
+      // IMPORTANT: Fix for Prokerala API format issues
+      if (endpoint === 'chart') {
+        // Handle chart_type parameter - Must be properly formatted JSON string
+        if (params.chart_type) {
+          // If it's already a string, make sure it's valid JSON
+          if (typeof params.chart_type === 'string') {
+            try {
+              // Validate it's valid JSON
+              JSON.parse(params.chart_type);
+            } catch (e) {
+              // If not valid JSON, create a valid one
+              params.chart_type = '{"name":"Rasi"}';
+            }
+          } else if (typeof params.chart_type === 'object') {
+            // If it's an object, stringify it
+            params.chart_type = JSON.stringify(params.chart_type);
+          } else {
+            // Default fallback
+            params.chart_type = '{"name":"Rasi"}';
+          }
+        } else {
+          // Set default if missing
+          params.chart_type = '{"name":"Rasi"}';
+        }
+        
+        // Ensure chart_style is set
+        if (!params.chart_style) {
+          params.chart_style = 'north-indian';
+        }
+        
+        // This is the crucial fix: Don't add timezone information at all!
+        // The API will handle it with default timezone
+        if (params.datetime) {
+          // Make sure any spaces are converted to 'T'
+          if (params.datetime.includes(' ')) {
             params.datetime = params.datetime.replace(' ', 'T');
           }
           
-          // Only add timezone if it doesn't already have one
-          if (!hasTimezone) {
-            params.datetime += '+05:30';
-          }
+          // Important: Remove any timezone information to avoid the double timezone issue
+          params.datetime = params.datetime.replace(/[+-]\d{2}:\d{2}$/, '');
           
-          console.log('Formatted ISO datetime for API request:', params.datetime);
-          
-          // Handle chart_type parameter correctly - CRITICAL FIX
-          // Always ensure chart_type is included for chart endpoint
-          if (!params.chart_type) {
-            // Use a properly formatted JSON string - not an object
-            params.chart_type = JSON.stringify({ name: "Rasi" });
-          } else if (typeof params.chart_type === 'object') {
-            // If it's an object, stringify it correctly
-            params.chart_type = JSON.stringify(params.chart_type);
-          } else if (typeof params.chart_type === 'string' && !params.chart_type.startsWith('{')) {
-            // If it's a string but not JSON, wrap it in JSON
-            params.chart_type = JSON.stringify({ name: params.chart_type });
-          }
-          
-          // Always ensure chart_style is set
-          if (!params.chart_style) {
-            params.chart_style = 'north-indian';
-          }
-        } catch (e) {
-          console.error('Error formatting datetime:', e);
+          console.log('Fixed datetime for chart API:', params.datetime);
         }
       }
       
       console.log('Final params for API request:', params);
       
-      // Make the API request
+      // Make the API request with properly formatted parameters
       const response = await this.client.get(`/api/prokerala-proxy/${endpoint}`, {
         params,
         headers: {
