@@ -235,7 +235,21 @@ You must follow this format exactly, keeping descriptions concise and direct. Ma
       console.log('Response received:', response.status);
       
       // Extract the generated text from the response
-      const insight = response.data.choices[0].message.content;
+      // Handle both response formats (direct API format and our custom format)
+      let insight;
+      if (response.data.success && response.data.data) {
+        // Using our custom API format
+        insight = response.data.data;
+      } else if (response.data.choices && response.data.choices[0].text) {
+        // Direct Together AI format
+        insight = response.data.choices[0].text;
+      } else if (response.data.choices && response.data.choices[0].message && response.data.choices[0].message.content) {
+        // OpenAI-like format
+        insight = response.data.choices[0].message.content;
+      } else {
+        console.warn('Unexpected response format:', response.data);
+        insight = response.data.data || response.data.text || 'Unable to parse response';
+      }
       
       console.log('%c === TOGETHER AI RESPONSE ===', 'color: green; font-weight: bold; font-size: 14px;');
       console.log(insight);

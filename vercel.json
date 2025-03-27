@@ -10,6 +10,7 @@
     { "source": "/api/prokerala-test", "destination": "/api/prokerala-api.js" },
     { "source": "/api/env-test", "destination": "/api/prokerala-api.js" },
     { "source": "/api/geocode", "destination": "/api/api-handler.js" },
+    { "source": "/api/ai/generate", "destination": "/api/ai-generate.js" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "builds": [
@@ -19,6 +20,10 @@
     },
     {
       "src": "api/api-handler.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/ai-generate.js", 
       "use": "@vercel/node"
     },
     {
