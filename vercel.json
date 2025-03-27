@@ -40,5 +40,7 @@
         { "key": "Access-Control-Allow-Headers", "value": "X-Requested-With, Content-Type, Accept, Authorization" }
       ]
     }
-  ]
+  ],
+  "buildCommand": "npm run build",
+  "nodeVersion": "18.x"
 }
