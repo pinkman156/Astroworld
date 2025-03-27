@@ -4,7 +4,13 @@ import { BirthData } from '../types';
 // Prokerala API credentials
 const PROKERALA_CLIENT_ID = import.meta.env.VITE_PROKERALA_CLIENT_ID || '';
 const PROKERALA_CLIENT_SECRET = import.meta.env.VITE_PROKERALA_CLIENT_SECRET || '';
-const PROKERALA_API_URL = 'https://api.prokerala.com/v2/astrology';
+
+// Flag to indicate if we should force using the backend API proxy
+// This is useful if the service worker isn't working or for debugging
+const FORCE_API_PROXY = true;
+
+// Use backend API proxy URLs instead of direct Prokerala URLs
+const BACKEND_API_URL = '';  // Empty string for relative URLs
 
 // Logger utility to control logging based on environment
 const logger = {
@@ -464,10 +470,10 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         const datetime = birthDate.toISOString().replace('Z', '+05:30');
         logger.debug('Formatted datetime:', datetime);
         
-        // Make request to get planet positions via CORS proxy
+        // Make request to get planet positions via our backend API proxy
         const planetResponse = await axios({
           method: 'GET',
-          url: '/api/prokerala-planet-position',
+          url: `${BACKEND_API_URL}/api/prokerala-planet-position`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -482,10 +488,10 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
           throw new Error(`Planet position API error: ${error.message}`);
         });
         
-        // Also get kundli data via CORS proxy
+        // Also get kundli data via our backend API proxy
         const kundliResponse = await axios({
           method: 'GET',
-          url: '/api/prokerala-kundli',
+          url: `${BACKEND_API_URL}/api/prokerala-kundli`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -501,10 +507,10 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
           return { data: null };
         });
         
-        // Get advanced chart data
+        // Get advanced chart data via our backend API proxy
         const chartResponse = await axios({
           method: 'GET',
-          url: '/api/prokerala-chart',
+          url: `${BACKEND_API_URL}/api/prokerala-chart`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'

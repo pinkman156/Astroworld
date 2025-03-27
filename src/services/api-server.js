@@ -5,7 +5,7 @@
 
 // Set the base URL for your API server
 // In production, this will be served from the same domain via Vercel serverless functions
-export const API_SERVER_URL = 'https://astroworld-pdh0cr9ng-pinkman156s-projects.vercel.app';
+export const API_SERVER_URL = ''; // Use relative URLs in production
 
 // API endpoints for different services
 export const API_ENDPOINTS = {
