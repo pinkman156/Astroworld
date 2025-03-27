@@ -20,86 +20,157 @@ export default async (req, res) => {
       return res.status(400).json({ error: 'Missing URL parameter' });
     }
     
-    // Check if the URL is already properly decoded
-    try {
-      // Try to decode once to see if it's double-encoded
-      const decodedOnce = decodeURIComponent(targetUrl);
-      
-      // If the decoded URL contains %20 or other encoded characters, it might be double-encoded
-      if (decodedOnce.includes('%')) {
-        try {
-          // Try to decode again to handle double encoding
-          targetUrl = decodeURIComponent(decodedOnce);
-        } catch (e) {
-          // If second decode fails, use the first decode result
-          targetUrl = decodedOnce;
+    // Special handling for OpenStreetMap - ALWAYS double encode
+    if (targetUrl.includes('nominatim.openstreetmap.org')) {
+      // For OpenStreetMap, we'll create a properly double-encoded URL
+      try {
+        // Parse the URL to extract the query parameters
+        let baseUrl = 'https://nominatim.openstreetmap.org/search';
+        let params = new URLSearchParams();
+        
+        // Extract query parameter (q=) from the URL
+        let queryMatch = targetUrl.match(/[?&]q=([^&]+)/);
+        if (queryMatch && queryMatch[1]) {
+          // First decode in case it's already encoded
+          let query = decodeURIComponent(queryMatch[1]);
+          params.append('q', query);
         }
-      } else {
-        // Use the decoded URL
-        targetUrl = decodedOnce;
+        
+        // Always add format=json
+        params.append('format', 'json');
+        
+        // Create a properly double-encoded URL
+        let properUrl = `${baseUrl}?${params.toString()}`;
+        
+        // Now double-encode the entire URL for the proxy
+        targetUrl = encodeURIComponent(properUrl);
+        console.log('Double-encoded OpenStreetMap URL:', targetUrl);
+      } catch (e) {
+        console.error('Error creating double-encoded URL:', e.message);
+        // If encoding fails, we'll continue with the original URL
       }
-    } catch (e) {
-      // If initial decode fails, the URL might not be encoded or is invalid
-      console.error('URL decoding error:', e.message);
-      // Continue with the original URL
     }
     
-    // Special handling for OpenStreetMap - always double encode the URL if it's not already encoded
-    if (targetUrl.includes('nominatim.openstreetmap.org') && !targetUrl.includes('%')) {
-      // Encode the URL to ensure it works with OpenStreetMap
-      targetUrl = encodeURI(targetUrl);
-      console.log('Encoded OpenStreetMap URL:', targetUrl);
-    }
+    // Special handling for Prokerala token endpoint
+    const isProkeralaTokenRequest = targetUrl.includes('api.prokerala.com/token');
     
     console.log(`Proxying ${req.method} request to: ${targetUrl}`);
     
     try {
-      // Determine if this is an OpenStreetMap URL
+      // Determine if this is an OpenStreetMap URL or Prokerala URL
       const isOpenStreetMap = targetUrl.includes('nominatim.openstreetmap.org');
+      const isProkeralaAPI = targetUrl.includes('api.prokerala.com');
       const isTogetherApi = targetUrl.includes('api.together.xyz');
       
-      // Set up headers for the request
-      const headers = {
-        'User-Agent': 'AstroInsights/1.0',
-        'Accept': isOpenStreetMap ? 'application/json' : '*/*',
-      };
+      // Extract headers from the original request
+      const headers = {};
       
-      // Add Accept-Language only for OpenStreetMap
+      // Copy important headers
+      if (req.headers) {
+        // User-Agent
+        headers['User-Agent'] = 'AstroInsights/1.0';
+        
+        // Accept header
+        headers['Accept'] = isOpenStreetMap ? 'application/json' : (req.headers.accept || '*/*');
+        
+        // Authorization header (if present)
+        if (req.headers.authorization) {
+          headers['Authorization'] = req.headers.authorization;
+        }
+        
+        // Content-Type for POST requests
+        if (req.method === 'POST') {
+          headers['Content-Type'] = req.headers['content-type'] || 'application/json';
+          
+          // For Prokerala token requests, ensure content-type is correct
+          if (isProkeralaTokenRequest) {
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
+          }
+        }
+      }
+      
+      // Add Accept-Language for OpenStreetMap
       if (isOpenStreetMap) {
         headers['Accept-Language'] = 'en';
       }
       
-      // Add Content-Type header for POST requests
-      if (req.method === 'POST') {
-        headers['Content-Type'] = req.headers['content-type'] || 'application/json';
-      }
+      // For POST requests, prepare the body
+      let requestBody = undefined;
       
-      // For POST requests, we need to read the request body
-      let body = undefined;
       if (req.method === 'POST') {
-        // Parse the request body if available
-        if (req.body) {
-          if (typeof req.body === 'string') {
-            body = req.body;
+        try {
+          // Special handling for Prokerala token endpoint
+          if (isProkeralaTokenRequest) {
+            // Get client credentials from environment variables
+            const clientId = process.env.VITE_PROKERALA_CLIENT_ID;
+            const clientSecret = process.env.VITE_PROKERALA_CLIENT_SECRET;
+            
+            if (clientId && clientSecret) {
+              console.log('Using Prokerala credentials from environment variables');
+              
+              // Create the form data
+              const params = new URLSearchParams();
+              params.append('grant_type', 'client_credentials');
+              params.append('client_id', clientId);
+              params.append('client_secret', clientSecret);
+              
+              requestBody = params.toString();
+            } else {
+              console.warn('Prokerala credentials not found in environment variables');
+              
+              // Try to use the body from the request if available
+              if (req.body) {
+                if (typeof req.body === 'string') {
+                  requestBody = req.body;
+                } else if (typeof req.body === 'object') {
+                  // Try to extract credentials from the request body
+                  const params = new URLSearchParams();
+                  
+                  if (req.body.grant_type) params.append('grant_type', req.body.grant_type);
+                  if (req.body.client_id) params.append('client_id', req.body.client_id);
+                  if (req.body.client_secret) params.append('client_secret', req.body.client_secret);
+                  
+                  requestBody = params.toString();
+                }
+              }
+            }
           } else {
-            // If it's an object, stringify it
-            body = JSON.stringify(req.body);
+            // Handle other POST requests normally
+            if (req.body) {
+              if (typeof req.body === 'string') {
+                requestBody = req.body;
+              } else if (typeof req.body === 'object') {
+                requestBody = JSON.stringify(req.body);
+              }
+            } else if (req.rawBody) {
+              requestBody = req.rawBody;
+            }
           }
-        } else if (req.rawBody) {
-          // Some serverless platforms provide rawBody
-          body = req.rawBody;
+          
+          // For Together API, ensure content-type is application/json
+          if (isTogetherApi && headers['Content-Type'] !== 'application/json') {
+            headers['Content-Type'] = 'application/json';
+          }
+          
+          console.log('Forwarding POST request with body type:', typeof requestBody);
+        } catch (bodyError) {
+          console.error('Error processing request body:', bodyError.message);
         }
-        
-        console.log('Forwarding POST request with body:', body);
       }
       
-      // Use native fetch to make the request
-      const response = await fetch(targetUrl, {
+      // Create fetch options
+      const fetchOptions = {
         method: req.method || 'GET',
-        headers,
-        // For POST requests, include the request body
-        body: body,
-      });
+        headers: headers
+      };
+      
+      // Add body for POST requests
+      if (req.method === 'POST' && requestBody) {
+        fetchOptions.body = requestBody;
+      }
+      
+      // Make the request
+      const response = await fetch(decodeURIComponent(targetUrl), fetchOptions);
       
       console.log(`Received response with status: ${response.status}`);
       
@@ -125,32 +196,6 @@ export default async (req, res) => {
       } else {
         // For non-JSON responses, return as text
         const text = await response.text();
-        
-        // Handle the case where the response is HTML but we expect JSON (like OpenStreetMap)
-        if (isOpenStreetMap && contentType.includes('text/html')) {
-          try {
-            // Try direct request to OpenStreetMap with double encoding
-            const doubleEncodedUrl = 'https%3A%2F%2Fnominatim.openstreetmap.org%2Fsearch%3Fq%3D' + 
-              encodeURIComponent(targetUrl.split('q=')[1].split('&')[0]) + '%26format%3Djson';
-            
-            console.log(`Retrying with double-encoded URL: ${doubleEncodedUrl}`);
-            
-            // Make a recursive call to the proxy with the double-encoded URL
-            return await fetch(`https://astroworld-nine.vercel.app/api/proxy?url=${doubleEncodedUrl}`)
-              .then(retryRes => retryRes.json())
-              .then(data => res.status(200).json(data))
-              .catch(e => {
-                console.error('Double-encoding retry failed:', e.message);
-                // Fall back to the original response
-                return res.status(response.status).send(text);
-              });
-          } catch (retryError) {
-            console.error('OpenStreetMap retry failed:', retryError.message);
-            // Fall back to the original response
-            return res.status(response.status).send(text);
-          }
-        }
-        
         return res.status(response.status).send(text);
       }
     } catch (fetchError) {
