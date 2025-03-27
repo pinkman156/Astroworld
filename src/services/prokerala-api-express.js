@@ -70,10 +70,10 @@ export const getCoordinates = async (placeName) => {
   try {
     logger.debug('Geocoding place:', placeName);
     
-    // Use our backend API endpoint instead of calling OpenStreetMap directly
+    // Use direct Vercel API endpoint
     const response = await axios({
       method: 'GET',
-      url: getFullApiUrl(API_ENDPOINTS.GEOCODE),
+      url: '/api/geocode',
       params: {
         q: placeName
       }
@@ -135,10 +135,10 @@ export const getProkeralaToken = async () => {
     
     logger.debug('Client ID exists:', !!clientId, 'Client Secret exists:', !!clientSecret);
     
-    // Make token request to the backend API
+    // Make token request to the Vercel API endpoint
     const response = await axios({
       method: 'POST',
-      url: getFullApiUrl(API_ENDPOINTS.PROKERALA_TOKEN),
+      url: '/api/prokerala-token',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
@@ -305,68 +305,65 @@ export const getBirthChart = async (birthData) => {
       const coordinates = await getCoordinates(birthData.place);
       logger.debug('Coordinates:', coordinates);
       
-      // Get OAuth token
-      const token = await getProkeralaToken();
-      
       // Normalize and parse the birth date and time
       const normalizedDate = normalizeDateFormat(birthData.date);
       const normalizedTime = normalizeTimeFormat(birthData.time);
       logger.debug('Normalized date and time:', normalizedDate, normalizedTime);
       
       // Format datetime for API
-      const datetime = `${normalizedDate}T${normalizedTime}:00+05:30`;
-      logger.debug('Formatted datetime:', datetime);
+      const formattedDateTime = `${normalizedDate}T${normalizedTime}:00+05:30`;
+      logger.debug('Formatted datetime:', formattedDateTime);
       
-      // Make planet position request
-      logger.debug('Requesting planet positions...');
-      const positionResponse = await axios({
+      // Get OAuth token
+      const token = await getProkeralaToken();
+      
+      // Get planet positions
+      const planetResponse = await axios({
         method: 'GET',
-        url: getFullApiUrl(API_ENDPOINTS.PROKERALA_PLANET_POSITION),
-        params: {
-          datetime,
-          coordinates,
-          ayanamsa: 1
-        },
+        url: '/api/prokerala-planet-position',
         headers: {
           'Authorization': `Bearer ${token}`
+        },
+        params: {
+          datetime: formattedDateTime,
+          coordinates,
+          ayanamsa: 1
         }
       });
       
-      // Make kundli request
-      logger.debug('Requesting kundli data...');
+      // Get kundli data
       const kundliResponse = await axios({
         method: 'GET',
-        url: getFullApiUrl(API_ENDPOINTS.PROKERALA_KUNDLI),
-        params: {
-          datetime,
-          coordinates,
-          ayanamsa: 1
-        },
+        url: '/api/prokerala-kundli',
         headers: {
           'Authorization': `Bearer ${token}`
+        },
+        params: {
+          datetime: formattedDateTime,
+          coordinates,
+          ayanamsa: 1
         }
       });
       
-      // Make chart request
-      logger.debug('Requesting chart data...');
+      // Get chart data
       const chartResponse = await axios({
         method: 'GET',
-        url: getFullApiUrl(API_ENDPOINTS.PROKERALA_CHART),
-        params: {
-          datetime,
-          coordinates,
-          ayanamsa: 1
-        },
+        url: '/api/prokerala-chart',
         headers: {
           'Authorization': `Bearer ${token}`
+        },
+        params: {
+          datetime: formattedDateTime,
+          coordinates,
+          ayanamsa: 1
         }
       });
       
       logger.debug('Received data from Prokerala API');
       
       // Process the response data to extract birth chart information
-      if (positionResponse.data && positionResponse.data.data) {
-        const positionData = positionResponse.data.data;
+      if (planetResponse.data && planetResponse.data.data) {
+        const positionData = planetResponse.data.data;
         const houseData = chartResponse.data?.data;
         
         // Extract sun, moon and ascendant data

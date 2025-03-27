@@ -7,6 +7,7 @@
     { "source": "/api/prokerala-planet-position", "destination": "/api/prokerala-api.js" },
     { "source": "/api/prokerala-kundli", "destination": "/api/prokerala-api.js" },
     { "source": "/api/prokerala-chart", "destination": "/api/prokerala-api.js" },
+    { "source": "/api/chart/birth", "destination": "/api/birth-chart.js" },
     { "source": "/api/prokerala-test", "destination": "/api/prokerala-api.js" },
     { "source": "/api/env-test", "destination": "/api/prokerala-api.js" },
     { "source": "/api/geocode", "destination": "/api/api-handler.js" },
@@ -24,6 +25,10 @@
     },
     {
       "src": "api/ai-generate.js", 
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/birth-chart.js",
       "use": "@vercel/node"
     },
     {

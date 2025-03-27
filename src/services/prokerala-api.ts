@@ -5,12 +5,11 @@ import { BirthData } from '../types';
 const PROKERALA_CLIENT_ID = import.meta.env.VITE_PROKERALA_CLIENT_ID || '';
 const PROKERALA_CLIENT_SECRET = import.meta.env.VITE_PROKERALA_CLIENT_SECRET || '';
 
-// Flag to indicate if we should force using the backend API proxy
-// This is useful if the service worker isn't working or for debugging
+// Always use the Vercel serverless API endpoints
 const FORCE_API_PROXY = true;
 
-// Use backend API proxy URLs instead of direct Prokerala URLs
-const BACKEND_API_URL = '';  // Empty string for relative URLs
+// Use Vercel serverless functions via relative URLs
+const API_SERVER_URL = '';  // Empty string for relative URLs within the same domain
 
 // Logger utility to control logging based on environment
 const logger = {
@@ -473,7 +472,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Make request to get planet positions via our backend API proxy
         const planetResponse = await axios({
           method: 'GET',
-          url: `${BACKEND_API_URL}/api/prokerala-planet-position`,
+          url: `${API_SERVER_URL}/api/prokerala-planet-position`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -491,7 +490,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Also get kundli data via our backend API proxy
         const kundliResponse = await axios({
           method: 'GET',
-          url: `${BACKEND_API_URL}/api/prokerala-kundli`,
+          url: `${API_SERVER_URL}/api/prokerala-kundli`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -510,7 +509,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Get advanced chart data via our backend API proxy
         const chartResponse = await axios({
           method: 'GET',
-          url: `${BACKEND_API_URL}/api/prokerala-chart`,
+          url: `${API_SERVER_URL}/api/prokerala-chart`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -697,7 +696,17 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
       }
     } catch (prokeralaError: any) {
       logger.error('Error communicating with Prokerala API:', prokeralaError);
-      logger.info('Falling back to mock data');
+      // Check if this is a CORS or network error
+      if (prokeralaError.message && (
+        prokeralaError.message.includes('Network Error') || 
+        prokeralaError.message.includes('Failed to fetch') ||
+        prokeralaError.message.includes('CORS')
+      )) {
+        throw new Error('Error communicating with Prokerala API: Cannot connect to external APIs. Please check if the CORS proxy is running.');
+      }
+      
+      // Fall back to mock data for other types of errors
+      logger.info('Falling back to mock data due to API error');
       return getMockBirthChart(birthData);
     }
   } catch (error: any) {

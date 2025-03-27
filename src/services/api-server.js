@@ -32,18 +32,17 @@ export const API_ENDPOINTS = {
  */
 export const getApiUrl = (endpoint) => `${API_SERVER_URL}${endpoint}`;
 
-// For local development, you can switch to a local server
-export const isLocalDevelopment = import.meta.env.DEV;
-export const LOCAL_API_SERVER_URL = 'http://localhost:3000';
+// For local development, remove other proxy configurations
+// Always use Vercel's built-in API routes
+export const isLocalDevelopment = false;
+export const LOCAL_API_SERVER_URL = '';
 
 /**
  * Get the appropriate API server URL based on environment
+ * Always returns empty string for relative URLs to use Vercel's API routes
  * @returns {string} The API server URL
  */
 export const getApiServerUrl = () => {
-  if (isLocalDevelopment) {
-    return LOCAL_API_SERVER_URL;
-  }
   return API_SERVER_URL;
 };
 
