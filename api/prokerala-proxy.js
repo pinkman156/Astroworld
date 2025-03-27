@@ -224,6 +224,12 @@ async function prokeralaApiRequest(req, res, endpoint) {
         console.warn('Error decoding datetime:', e.message);
       }
       
+      // Check if it contains space or + between T and timezone
+      if (decodedDatetime.includes('T')) {
+        // Remove any spaces between time and timezone that could cause issues
+        decodedDatetime = decodedDatetime.replace(/T(\d{2}:\d{2}(?::\d{2})?)(?:\s|\+)([+-]\d{2}:\d{2})/, 'T$1$2');
+      }
+      
       // Handle spaces and plus signs
       decodedDatetime = decodedDatetime.replace(/\+/g, ' ');
       
@@ -234,8 +240,11 @@ async function prokeralaApiRequest(req, res, endpoint) {
           decodedDatetime = decodedDatetime.replace(' ', 'T');
         }
         
+        // Detect if timezone is already present
+        const hasTimezone = /T[\d:]+[+-][\d:]+$/.test(decodedDatetime);
+        
         // If there's no timezone specified, add IST (+05:30)
-        if (!decodedDatetime.match(/[+-]\d{2}:\d{2}$/)) {
+        if (!hasTimezone) {
           decodedDatetime += '+05:30';
         }
         
@@ -289,9 +298,30 @@ async function prokeralaApiRequest(req, res, endpoint) {
       ayanamsa: query.ayanamsa || 1
     };
     
-    // Add additional parameters if provided
-    if (query.chart_type) params.chart_type = query.chart_type;
-    if (query.chart_style) params.chart_style = query.chart_style;
+    // Properly handle chart_type for the chart endpoint
+    if (endpoint === 'chart') {
+      // For chart_type, ensure it's a valid JSON string
+      if (query.chart_type) {
+        try {
+          // Try to parse as JSON to check if valid
+          const typeObj = typeof query.chart_type === 'string' 
+            ? JSON.parse(query.chart_type) 
+            : query.chart_type;
+          
+          // Create a clean version with just the name property
+          params.chart_type = JSON.stringify({ name: typeObj.name || "Rasi" });
+        } catch (e) {
+          // If parsing fails, use default
+          console.warn('Error parsing chart_type, using default:', e.message);
+          params.chart_type = JSON.stringify({ name: "Rasi" });
+        }
+      } else {
+        params.chart_type = JSON.stringify({ name: "Rasi" });
+      }
+      
+      // Add chart_style
+      params.chart_style = query.chart_style || 'north-indian';
+    }
     
     console.log(`Making ${endpoint} request to Prokerala API with params:`, params);
     

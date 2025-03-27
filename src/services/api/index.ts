@@ -251,17 +251,35 @@ class ApiService {
           // First ensure any URL encoding is properly handled
           params.datetime = decodeURIComponent(params.datetime);
           
-          // Convert space to 'T' and add timezone (+05:30 for IST)
-          // Example: 2000-06-15 10:15:00 => 2000-06-15T10:15:00+05:30
-          params.datetime = params.datetime.replace(' ', 'T') + '+05:30';
+          // Check if the datetime already has timezone information
+          const hasTimezone = params.datetime.match(/[+-]\d{2}:\d{2}$/);
+          
+          // Convert space to 'T' if needed
+          if (params.datetime.includes(' ') && !params.datetime.includes('T')) {
+            params.datetime = params.datetime.replace(' ', 'T');
+          }
+          
+          // Only add timezone if it doesn't already have one
+          if (!hasTimezone) {
+            params.datetime += '+05:30';
+          }
           
           console.log('Formatted ISO datetime for API request:', params.datetime);
           
-          // Add required chart parameters if not present
+          // Handle chart_type parameter correctly
           if (!params.chart_type) {
-            params.chart_type = JSON.stringify({ name: 'Rasi' });
+            // Use a plain object - the API will stringify it correctly
+            params.chart_type = {"name": "Rasi"};
+          } else if (typeof params.chart_type === 'string' && params.chart_type.startsWith('{')) {
+            // If it's a JSON string, parse it to object
+            try {
+              params.chart_type = JSON.parse(params.chart_type);
+            } catch (e) {
+              console.error('Error parsing chart_type:', e);
+            }
           }
           
+          // Always ensure chart_style is set
           if (!params.chart_style) {
             params.chart_style = 'north-indian';
           }
@@ -269,6 +287,8 @@ class ApiService {
           console.error('Error formatting datetime:', e);
         }
       }
+      
+      console.log('Final params for API request:', params);
       
       // Make the API request
       const response = await this.client.get(`/api/prokerala-proxy/${endpoint}`, {
@@ -356,12 +376,15 @@ class ApiService {
       
       console.log('Formatted datetime for API:', formattedDateTime);
       
-      // Get the birth chart data using our helper method
+      // For chart API, directly use ISO 8601 format
+      const isoDateTime = formattedDateTime.replace(' ', 'T') + '+05:30';
+      
+      // Get the birth chart data using our helper method with explicit chart parameters
       const chartResponse = await this.makeProkeralaRequest('chart', {
-        datetime: formattedDateTime,
+        datetime: isoDateTime,
         coordinates,
         ayanamsa: 1, // Lahiri ayanamsa
-        chart_type: JSON.stringify({ name: 'Rasi' }),
+        chart_type: { name: "Rasi" }, // Send as object, not JSON string
         chart_style: 'north-indian'
       });
       
@@ -461,30 +484,30 @@ class ApiService {
       
       console.log('Formatted datetime for API (preload):', formattedDateTime);
       
-      // Get Prokerala token
-      const token = await this.getProkeralaToken();
+      // For chart API, directly use ISO 8601 format
+      const isoDateTime = formattedDateTime.replace(' ', 'T') + '+05:30';
       
       // Preload various astrological data in parallel
       await Promise.all([
         // Get planet positions
         this.makeProkeralaRequest('planet-position', {
-          datetime: formattedDateTime,
+          datetime: formattedDateTime, // Standard format for this endpoint
           coordinates: coordinates,
           ayanamsa: 1
         }),
         
         // Get birth chart
         this.makeProkeralaRequest('chart', {
-          datetime: formattedDateTime,
+          datetime: isoDateTime, // ISO format for chart endpoint
           coordinates: coordinates,
           ayanamsa: 1,
-          chart_type: JSON.stringify({ name: 'Rasi' }),
+          chart_type: { name: "Rasi" }, // Send as object, not JSON string
           chart_style: 'north-indian'
         }),
         
         // Get kundli
         this.makeProkeralaRequest('kundli', {
-          datetime: formattedDateTime,
+          datetime: formattedDateTime, // Standard format for this endpoint
           coordinates: coordinates,
           ayanamsa: 1
         })
