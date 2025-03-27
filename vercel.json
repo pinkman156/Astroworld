@@ -1,14 +1,14 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/proxy/:path*", "destination": "/api/proxy" }
+    { "source": "/api/proxy", "destination": "/api/proxy" }
   ],
   "env": {
-    "VITE_CORS_PROXY_URL": "/proxy?url="
+    "VITE_CORS_PROXY_URL": "/api/proxy?url="
   },
   "build": {
     "env": {
-      "VITE_CORS_PROXY_URL": "/proxy?url="
+      "VITE_CORS_PROXY_URL": "/api/proxy?url="
     }
   },
   "functions": {
