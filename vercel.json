@@ -4,11 +4,13 @@
     { "source": "/api/proxy", "destination": "/api/proxy" }
   ],
   "env": {
-    "VITE_CORS_PROXY_URL": "/api/proxy?url="
+    "VITE_CORS_PROXY_URL": "/api/proxy?url=",
+    "DEBUG": "true"
   },
   "build": {
     "env": {
-      "VITE_CORS_PROXY_URL": "/api/proxy?url="
+      "VITE_CORS_PROXY_URL": "/api/proxy?url=",
+      "DEBUG": "true"
     }
   },
   "functions": {
