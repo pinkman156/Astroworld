@@ -108,19 +108,18 @@ export const getProkeralaToken = async () => {
   try {
     logger.debug('Requesting new OAuth token...');
     
-    // Include fallback credentials directly in the request
-    // These should be retrieved from environment variables on the client-side
-    // Only do this as a last resort when server environment variables aren't working
+    // Get credentials from environment variables
+    const clientId = import.meta.env.VITE_PROKERALA_CLIENT_ID;
+    const clientSecret = import.meta.env.VITE_PROKERALA_CLIENT_SECRET;
+    
+    // Create data with credentials
     const data = new URLSearchParams({
-      'grant_type': 'client_credentials'
+      'grant_type': 'client_credentials',
+      'client_id': clientId,
+      'client_secret': clientSecret
     });
     
-    // If you're having persistent issues with server-side credentials,
-    // you can add client credentials directly here as a temporary solution
-    // WARNING: This is not secure for production, but can help diagnose issues
-    // Example:
-    // data.append('client_id', 'your-prokerala-client-id-here');
-    // data.append('client_secret', 'your-prokerala-client-secret-here');
+    logger.debug('Client ID exists:', !!clientId, 'Client Secret exists:', !!clientSecret);
     
     const response = await axios({
       method: 'POST',

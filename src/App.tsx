@@ -4,6 +4,7 @@ import './App.css'
 import BirthDataForm from './components/BirthDataForm'
 import AstrologyInsight from './components/AstrologyInsight'
 import ShareCard from './components/ShareCard'
+import EnvTester from './components/EnvTester'
 import { BirthData, AstrologyInsight as AstrologyInsightType } from './types'
 import api from './services/api'
 
@@ -121,6 +122,9 @@ function App() {
             Discover the cosmic forces that shape your journey through life. Enter your birth details below to receive a personalized astrological analysis.
           </p>
         </motion.header>
+
+        {/* Environment Variables Tester */}
+        <EnvTester />
 
         <div className="grid grid-cols-1 gap-8">
           {/* Birth Data Form */}
