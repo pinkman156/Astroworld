@@ -8,7 +8,8 @@ const API_CONFIG = {
     timeout: 30000,
   },
   production: {
-    baseURL: process.env.VITE_API_BASE_URL || '',
+    // Use relative URL in production to avoid CORS issues
+    baseURL: '',
     timeout: 30000,
   },
 };
@@ -27,7 +28,12 @@ class ApiService {
   constructor() {
     // Determine environment
     const environment = import.meta.env.MODE || 'development';
+    
+    // In development, use the configured baseURL
+    // In production, use a relative URL to avoid CORS issues
     const config = environment === 'production' ? API_CONFIG.production : API_CONFIG.development;
+    
+    console.log(`API Service initialized in ${environment} mode with baseURL: ${config.baseURL || 'relative URLs'}`);
 
     // Create API client
     this.client = axios.create({

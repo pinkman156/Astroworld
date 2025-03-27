@@ -50,14 +50,17 @@ module.exports = async (req, res) => {
   
   try {
     // Get API key from environment variables
-    const apiKey = process.env.VITE_TOGETHER_API_KEY;
+    const apiKey = process.env.VITE_TOGETHER_API_KEY || process.env.TOGETHER_API_KEY;
     
     if (!apiKey) {
+      console.error('Missing Together AI API key. Environment variables available:', Object.keys(process.env).filter(key => key.includes('TOGETHER')));
       return res.status(500).set(corsHeaders).json({
         error: 'Missing API key',
         message: 'Together AI API key is not configured'
       });
     }
+    
+    console.log('Calling Together AI API with key:', apiKey.substring(0, 5) + '...');
     
     // Validate request body
     const validation = validateRequest(req.body);

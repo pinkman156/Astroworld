@@ -2,18 +2,29 @@
   "version": 2,
   "builds": [
     {
-      "src": "index.html",
-      "use": "@vercel/static"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     },
     {
-      "src": "server.js",
+      "src": "api/**/*.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/server.js"
+      "src": "/api/prokerala-proxy/(.*)",
+      "dest": "/api/prokerala-proxy.js"
+    },
+    {
+      "src": "/api/geocode",
+      "dest": "/api/geocode.js"
+    },
+    {
+      "src": "/api/together/chat",
+      "dest": "/api/together-chat.js"
     },
     {
       "src": "/(.*)",
@@ -21,7 +32,7 @@
     }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://astroworld.vercel.app"
+    "VITE_API_BASE_URL": "https://astroworld-nine.vercel.app"
   },
   "github": {
     "silent": true

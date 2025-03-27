@@ -71,16 +71,19 @@ function handleOptions(req, res) {
 async function getProkeralaToken(req, res) {
   try {
     // Get client credentials from environment variables
-    const clientId = process.env.VITE_PROKERALA_CLIENT_ID;
-    const clientSecret = process.env.VITE_PROKERALA_CLIENT_SECRET;
+    const clientId = process.env.VITE_PROKERALA_CLIENT_ID || process.env.PROKERALA_CLIENT_ID;
+    const clientSecret = process.env.VITE_PROKERALA_CLIENT_SECRET || process.env.PROKERALA_CLIENT_SECRET;
     
     if (!clientId || !clientSecret) {
+      console.error('Missing API credentials. Client ID:', !!clientId, 'Client Secret:', !!clientSecret);
       return {
         status: 500,
         headers: corsHeaders,
         body: { error: 'Missing API credentials' }
       };
     }
+    
+    console.log('Getting Prokerala token with client ID:', clientId);
     
     const response = await axios({
       method: 'POST',
