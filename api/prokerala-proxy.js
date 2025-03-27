@@ -168,6 +168,8 @@ async function prokeralaApiRequest(req, res, endpoint) {
     const { query } = req;
     const token = req.headers.authorization?.split(' ')[1];
     
+    console.log('API request parameters:', query);
+    
     // Validate request
     const validation = validateRequest(query, ['datetime', 'coordinates']);
     if (!validation.valid) {
@@ -186,9 +188,19 @@ async function prokeralaApiRequest(req, res, endpoint) {
       };
     }
     
+    // Ensure datetime is properly decoded
+    let decodedDatetime = query.datetime;
+    
+    // If datetime contains a '+' character, it might be an encoded space
+    if (decodedDatetime.includes('+')) {
+      // Replace '+' with space for proper formatting
+      decodedDatetime = decodedDatetime.replace(/\+/g, ' ');
+      console.log('Decoded datetime:', decodedDatetime);
+    }
+    
     // Construct query parameters
     const params = {
-      datetime: query.datetime,
+      datetime: decodedDatetime,
       coordinates: query.coordinates,
       ayanamsa: query.ayanamsa || 1
     };
@@ -196,6 +208,8 @@ async function prokeralaApiRequest(req, res, endpoint) {
     // Add additional parameters if provided
     if (query.chart_type) params.chart_type = query.chart_type;
     if (query.chart_style) params.chart_style = query.chart_style;
+    
+    console.log(`Making ${endpoint} request to Prokerala API with params:`, params);
     
     // Make request to Prokerala API
     const response = await axios({
@@ -217,6 +231,7 @@ async function prokeralaApiRequest(req, res, endpoint) {
     
     // Forward the error response from Prokerala
     if (error.response) {
+      console.error('Prokerala API error response:', error.response.status, error.response.data);
       return {
         status: error.response.status,
         headers: corsHeaders,

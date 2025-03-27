@@ -244,6 +244,13 @@ class ApiService {
       // Get a fresh token
       const token = await this.getProkeralaToken();
       
+      // Ensure datetime is properly formatted for URL
+      if (params.datetime) {
+        // Make sure spaces are properly encoded
+        params.datetime = params.datetime.replace(/ /g, '%20');
+        console.log('Formatted datetime for API request:', params.datetime);
+      }
+      
       // Make the API request
       const response = await this.client.get(`/api/prokerala-proxy/${endpoint}`, {
         params,
@@ -327,6 +334,8 @@ class ApiService {
         
         formattedDateTime = `${year}-${month}-${day} ${formattedTime}:00`;
       }
+      
+      console.log('Formatted datetime for API:', formattedDateTime);
       
       // Get the birth chart data using our helper method
       const chartResponse = await this.makeProkeralaRequest('chart', {
@@ -428,6 +437,8 @@ class ApiService {
         
         formattedDateTime = `${year}-${month}-${day} ${formattedTime}:00`;
       }
+      
+      console.log('Formatted datetime for API (preload):', formattedDateTime);
       
       // Get Prokerala token
       const token = await this.getProkeralaToken();
