@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/proxy/:path*", "destination": "/api/proxy" }
+  ],
+  "env": {
+    "VITE_CORS_PROXY_URL": "/proxy?url="
+  },
+  "build": {
+    "env": {
+      "VITE_CORS_PROXY_URL": "/proxy?url="
+    }
+  },
+  "functions": {
+    "api/proxy.js": {
+      "memory": 256,
+      "maxDuration": 10
+    }
+  }
+} 

@@ -26,10 +26,12 @@
     "d3": "^7.9.0",
     "framer-motion": "^12.6.0",
     "html2canvas": "^1.4.1",
+    "http-proxy-middleware": "^3.0.0",
     "react": "^19.0.0",
     "react-apexcharts": "^1.7.0",
     "react-dom": "^19.0.0",
-    "react-svg-radar-chart": "^1.4.0"
+    "react-svg-radar-chart": "^1.4.0",
+    "vercel-node-server": "^2.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

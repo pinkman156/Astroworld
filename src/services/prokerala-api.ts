@@ -8,6 +8,26 @@ const PROKERALA_API_URL = 'https://api.prokerala.com/v2/astrology';
 // CORS proxy URL
 const CORS_PROXY_URL = 'http://localhost:8080/';
 
+// Logger utility to control logging based on environment
+const logger = {
+  debug: (message: string, ...args: any[]) => {
+    if (import.meta.env.DEV) {
+      console.debug(`[Astro-Debug] ${message}`, ...args);
+    }
+  },
+  info: (message: string, ...args: any[]) => {
+    if (import.meta.env.DEV) {
+      console.info(`[Astro-Info] ${message}`, ...args);
+    }
+  },
+  warn: (message: string, ...args: any[]) => {
+    console.warn(`[Astro-Warn] ${message}`, ...args);
+  },
+  error: (message: string, ...args: any[]) => {
+    console.error(`[Astro-Error] ${message}`, ...args);
+  }
+};
+
 // Define types for Prokerala API responses
 interface PlanetData {
   id: number;
@@ -33,8 +53,6 @@ interface PlanetData {
  * @returns Normalized date string in YYYY-MM-DD format
  */
 const normalizeDateFormat = (dateStr: string): string => {
-  console.log('Normalizing date format:', dateStr);
-  
   // Check if already in YYYY-MM-DD format
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     return dateStr;
@@ -76,11 +94,11 @@ const normalizeDateFormat = (dateStr: string): string => {
       return `${year}-${month}-${day}`;
     }
   } catch (error) {
-    console.error('Error parsing date:', error);
+    logger.error('Error parsing date:', error);
   }
   
   // If all else fails, return the original string and let the caller handle the error
-  console.error('Could not normalize date format:', dateStr);
+  logger.error('Could not normalize date format:', dateStr);
   return dateStr;
 };
 
@@ -90,8 +108,6 @@ const normalizeDateFormat = (dateStr: string): string => {
  * @returns Normalized time string in HH:MM format
  */
 const normalizeTimeFormat = (timeStr: string): string => {
-  console.log('Normalizing time format:', timeStr);
-  
   // Check if already in HH:MM format
   if (/^\d{1,2}:\d{2}$/.test(timeStr)) {
     const [hours, minutes] = timeStr.split(':').map(Number);
@@ -125,7 +141,7 @@ const normalizeTimeFormat = (timeStr: string): string => {
   }
   
   // If all else fails, return the original string and let the caller handle the error
-  console.error('Could not normalize time format:', timeStr);
+  logger.error('Could not normalize time format:', timeStr);
   return timeStr;
 };
 
@@ -150,9 +166,14 @@ export const getCoordinates = async (place: string): Promise<string> => {
       return `${latitude.toFixed(3)},${longitude.toFixed(3)}`;
     }
     
-    throw new Error('Location not found');
-  } catch (error) {
-    console.error('Error getting coordinates:', error);
+    throw new Error(`Location "${place}" not found in geocoding service`);
+  } catch (error: any) {
+    logger.error('Error getting coordinates:', error);
+    if (error.response) {
+      throw new Error(`Geocoding service error: ${error.response.status} - ${error.response.statusText}`);
+    } else if (error.request) {
+      throw new Error('Cannot connect to geocoding service. Please check your network connection.');
+    }
     throw error;
   }
 };
@@ -163,7 +184,7 @@ export const getCoordinates = async (place: string): Promise<string> => {
  */
 export const getProkeralaToken = async (): Promise<string> => {
   try {
-    console.log('Requesting new OAuth token...');
+    logger.debug('Requesting new OAuth token...');
     const response = await axios({
       method: 'POST',
       url: `${CORS_PROXY_URL}https://api.prokerala.com/token`,
@@ -178,13 +199,18 @@ export const getProkeralaToken = async (): Promise<string> => {
     });
     
     if (response.data && response.data.access_token) {
-      console.log('Successfully obtained OAuth token');
+      logger.debug('Successfully obtained OAuth token');
       return response.data.access_token;
     }
     
-    throw new Error('Failed to get access token');
-  } catch (error) {
-    console.error('Error getting Prokerala token:', error);
+    throw new Error('Failed to get access token from response');
+  } catch (error: any) {
+    logger.error('Error getting Prokerala token:', error);
+    if (error.response) {
+      throw new Error(`Authentication error: ${error.response.status} - ${error.response.data?.error || error.response.statusText}`);
+    } else if (error.request) {
+      throw new Error('Cannot connect to authentication service. Please check your network connection.');
+    }
     throw error;
   }
 };
@@ -359,40 +385,37 @@ export const getMockBirthChart = (birthData: BirthData): BirthChartData => {
  */
 export const getBirthChart = async (birthData: BirthData): Promise<BirthChartData> => {
   try {
-    console.log('Getting birth chart for:', birthData);
+    logger.debug('Getting birth chart for:', birthData);
     
     if (!PROKERALA_CLIENT_ID || !PROKERALA_CLIENT_SECRET) {
-      console.log('No Prokerala API credentials provided, using mock data');
+      logger.warn('No Prokerala API credentials provided, using mock data');
       return getMockBirthChart(birthData);
     }
     
     try {
-      console.log('Making API requests to Prokerala via CORS proxy...');
+      logger.debug('Making API requests to Prokerala via CORS proxy...');
       
       try {
         // Get coordinates for the birth place
         const coordinates = await getCoordinates(birthData.place);
-        console.log('Coordinates:', coordinates);
+        logger.debug('Coordinates:', coordinates);
         
         // Get OAuth token
         const token = await getProkeralaToken();
-        console.log('Successfully obtained OAuth token');
         
         // Normalize and parse the birth date and time
-        console.log('Parsing birth date and time:', birthData.date, birthData.time);
         const normalizedDate = normalizeDateFormat(birthData.date);
         const normalizedTime = normalizeTimeFormat(birthData.time);
-        console.log('Normalized date and time:', normalizedDate, normalizedTime);
+        logger.debug('Normalized date and time:', normalizedDate, normalizedTime);
         
         const [year, month, day] = normalizedDate.split('-').map(Number);
         const [hourStr, minuteStr] = normalizedTime.split(':');
         const hour = parseInt(hourStr, 10);
         const minute = parseInt(minuteStr, 10);
-        console.log('Parsed date components:', { year, month, day, hour, minute });
         
         // Validate date and time values
         if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hour) || isNaN(minute)) {
-          console.error('Invalid date/time format after normalization:', normalizedDate, normalizedTime);
+          logger.error('Invalid date/time format after normalization:', normalizedDate, normalizedTime);
           throw new Error('Invalid date/time format');
         }
         
@@ -408,13 +431,13 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         
         // Check if the date is valid
         if (isNaN(birthDate.getTime())) {
-          console.error('Invalid date created:', birthDate);
+          logger.error('Invalid date created:', birthDate);
           throw new Error('Invalid date created');
         }
         
         // Format as ISO string with the correct timezone
         const datetime = birthDate.toISOString().replace('Z', '+05:30');
-        console.log('Formatted datetime:', datetime);
+        logger.debug('Formatted datetime:', datetime);
         
         // Make request to get planet positions via CORS proxy
         const planetResponse = await axios({
@@ -429,6 +452,9 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
             coordinates: coordinates,
             ayanamsa: 1 // Lahiri Ayanamsa
           }
+        }).catch(error => {
+          logger.error('Error fetching planet positions:', error);
+          throw new Error(`Planet position API error: ${error.message}`);
         });
         
         // Also get kundli data via CORS proxy
@@ -444,6 +470,10 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
             coordinates: coordinates,
             ayanamsa: 1 // Lahiri Ayanamsa
           }
+        }).catch(error => {
+          logger.error('Error fetching kundli data:', error);
+          // Continue as we might still use planet positions
+          return { data: null };
         });
         
         // Get advanced chart data
@@ -461,20 +491,13 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
             chart_type: "rasi", // Rasi chart (D1)
             chart_style: "north-indian" // North Indian style chart
           }
+        }).catch(error => {
+          logger.error('Error fetching chart data:', error);
+          // Continue as we might still use planet positions
+          return { data: null };
         });
         
-        console.log('Received data from Prokerala API');
-        
-        // Print the raw data to console for inspection
-        console.log('%c === PROKERALA API DATA ===', 'color: green; font-weight: bold; font-size: 14px;');
-        console.log('%c Planet Position Data:', 'color: blue; font-weight: bold;');
-        console.log(planetResponse.data);
-        
-        console.log('%c Kundli Data:', 'color: purple; font-weight: bold;');
-        console.log(kundliResponse.data);
-        
-        console.log('%c Chart Data:', 'color: teal; font-weight: bold;');
-        console.log(chartResponse.data);
+        logger.debug('Received data from Prokerala API');
         
         // Process the response data
         if (planetResponse.data && planetResponse.data.status === 'ok' && 
@@ -500,12 +523,8 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
           if (chartResponse.data && chartResponse.data.status === 'ok' &&
               chartResponse.data.data) {
               
-            // Log extra chart details for exploration
-            console.log('%c Detailed Chart Analysis:', 'color: red; font-weight: bold;');
-            
             // Extract ascendant sign correctly from chart data
             if (chartResponse.data.data.ascendant) {
-              console.log('Ascendant Data:', chartResponse.data.data.ascendant);
               // Only update if we're not working with the special case birth chart
               if (!(birthData.date === '2000-06-15' && 
                     birthData.time === '10:15' && 
@@ -514,7 +533,6 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
                 ascendantPosition = chartResponse.data.data.ascendant.position || 0;
               }
             } else if (chartResponse.data.data.lagna) {
-              console.log('Lagna Data:', chartResponse.data.data.lagna);
               // Only update if we're not working with the special case birth chart
               if (!(birthData.date === '2000-06-15' && 
                     birthData.time === '10:15' && 
@@ -526,13 +544,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
             
             // Extract houses and their lords
             if (chartResponse.data.data.houses) {
-              console.log('House Data:', chartResponse.data.data.houses);
               houseData = chartResponse.data.data.houses;
-            }
-            
-            // Extract planet house positions
-            if (chartResponse.data.data.planet_positions) {
-              console.log('Planets in Houses:', chartResponse.data.data.planet_positions);
             }
           }
           
@@ -576,7 +588,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
               birthData.time === '10:15' && 
               birthData.place.toLowerCase().includes('morena')) {
             
-            console.log('Applying special configuration for the specific birth chart (2000-06-15, 10:15, Morena)');
+            logger.debug('Applying special configuration for the specific birth chart');
             
             // Force ascendant to be Leo/Simha
             ascendantSign = 'Simha';
@@ -643,38 +655,22 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
             houses: houses.length > 0 ? houses : undefined
           };
           
-          console.log('%c Processed Birth Chart Data:', 'color: orange; font-weight: bold;');
-          console.log(processedData);
-          console.log('%c === END OF PROKERALA DATA ===', 'color: green; font-weight: bold; font-size: 14px;');
-          
-          console.log('Successfully processed birth chart data');
+          logger.debug('Successfully processed birth chart data');
           return processedData;
         }
         
         throw new Error('Invalid response from Prokerala API');
       } catch (proxyError: any) {
-        console.error('Error with CORS proxy:', proxyError);
-        console.log('=== CORS PROXY ERROR ===');
-        console.log('The app cannot connect to external APIs without a CORS proxy.');
-        console.log('Steps to fix:');
-        console.log('1. Open a NEW terminal window');
-        console.log('2. Run: cd /Users/nipun/Desktop/astro/astro-insights');
-        console.log('3. Run: npm run proxy');
-        console.log('4. Keep that terminal window open while using the app');
-        console.log('5. If you already tried running the proxy and got an EADDRINUSE error,');
-        console.log('   you may need to kill the existing process using port 8080:');
-        console.log('   Run: lsof -i:8080');
-        console.log('   Then: kill -9 [PID]');
-        console.log('===============================');
-        throw new Error('CORS proxy issue: ' + proxyError.message);
+        logger.error('Error with CORS proxy:', proxyError);
+        throw new Error('Cannot connect to external APIs. Please check if the CORS proxy is running.');
       }
-    } catch (prokeralaError) {
-      console.error('Error communicating with Prokerala API:', prokeralaError);
-      console.log('Falling back to mock data');
+    } catch (prokeralaError: any) {
+      logger.error('Error communicating with Prokerala API:', prokeralaError);
+      logger.info('Falling back to mock data');
       return getMockBirthChart(birthData);
     }
-  } catch (error) {
-    console.error('Error fetching birth chart, using mock data:', error);
+  } catch (error: any) {
+    logger.error('Error fetching birth chart, using mock data:', error);
     return getMockBirthChart(birthData);
   }
 }; 
