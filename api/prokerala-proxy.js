@@ -289,30 +289,76 @@ async function prokeralaApiRequest(req, res, endpoint) {
         };
       }
       
-      // Ensure chart_type is valid JSON
+      // Process chart_type into the required format: {"name":"ChartTypeName"}
       try {
-        // If it's already an object, stringify it
-        if (typeof query.chart_type === 'object') {
-          chartType = JSON.stringify(query.chart_type);
-        } else {
-          // Try to parse if it's a string
-          try {
-            const parsedType = JSON.parse(query.chart_type);
-            if (!parsedType.name) {
-              throw new Error('Missing name property');
+        // If it's already an object with a name property
+        if (typeof query.chart_type === 'object' && query.chart_type.name) {
+          // Create the JSON object format required by Prokerala
+          chartType = JSON.stringify({ name: query.chart_type.name });
+        } else if (typeof query.chart_type === 'string') {
+          // Try to parse if it looks like JSON
+          if (query.chart_type.includes('{') && query.chart_type.includes('name')) {
+            try {
+              // Try to parse and reformat to ensure valid JSON
+              const parsedType = JSON.parse(query.chart_type);
+              if (parsedType && parsedType.name) {
+                chartType = JSON.stringify({ name: parsedType.name });
+              } else {
+                throw new Error('Missing name property in JSON');
+              }
+            } catch (parseError) {
+              // If it has quotes but isn't valid JSON, try to extract the name
+              const nameMatch = query.chart_type.match(/['"]name['"]:\s*['"]([^'"]+)['"]/);
+              if (nameMatch && nameMatch[1]) {
+                chartType = JSON.stringify({ name: nameMatch[1] });
+              } else {
+                throw parseError;
+              }
             }
-            // Re-stringify to ensure proper format
-            chartType = JSON.stringify({ name: parsedType.name });
-          } catch (parseError) {
-            // Handle the case where it might be a single string like "Rasi"
-            if (typeof query.chart_type === 'string' && query.chart_type.match(/^[A-Za-z]+$/)) {
-              // If it's just a name string (e.g. "Rasi"), convert to proper format
-              chartType = JSON.stringify({ name: query.chart_type });
-            } else {
-              // If parsing fails and it's not a simple string, give clear error
-              throw parseError;
-            }
+          } else {
+            // If it's just a plain string (like "Rasi"), wrap it in the expected format
+            chartType = JSON.stringify({ name: query.chart_type });
           }
+        } else {
+          throw new Error('Invalid chart_type format');
+        }
+        
+        // Validate the chart type against allowed values
+        try {
+          const parsedChartType = JSON.parse(chartType);
+          const chartTypeName = parsedChartType.name;
+          
+          // List of valid chart types (case insensitive matching)
+          const validChartTypes = [
+            'Rasi', 'Navamsa', 'Lagna', 'Trimsamsa', 'Drekkana', 'Chaturthamsa', 
+            'Dasamsa', 'Ashtamsa', 'Dwadasamsa', 'Shodasamsa', 'Hora', 
+            'Akshavedamsa', 'Shashtyamsa', 'Panchamsa', 'Khavedamsa', 
+            'Saptavimsamsa', 'Shashtamsa', 'Chaturvimsamsa', 'Saptamsa', 
+            'Vimsamsa', 'Upagraha', 'Bhava', 'Sun', 'Moon'
+          ];
+          
+          // Check if the chart type is valid (case insensitive)
+          const isValid = validChartTypes.some(
+            type => type.toLowerCase() === chartTypeName.toLowerCase()
+          );
+          
+          if (!isValid) {
+            return {
+              status: 400,
+              headers: corsHeaders,
+              body: { 
+                error: 'Invalid chart_type value',
+                message: `chart_type name must be one of: ${validChartTypes.join(', ')}`,
+                provided: query.chart_type
+              }
+            };
+          }
+          
+          // Ensure proper casing (first letter uppercase, rest lowercase)
+          const properCase = chartTypeName.charAt(0).toUpperCase() + chartTypeName.slice(1).toLowerCase();
+          chartType = JSON.stringify({ name: properCase });
+        } catch (e) {
+          throw new Error('Failed to validate chart type: ' + e.message);
         }
       } catch (e) {
         // If parsing fails, give clear error
@@ -322,7 +368,8 @@ async function prokeralaApiRequest(req, res, endpoint) {
           body: { 
             error: 'Invalid chart_type',
             message: 'chart_type must be valid JSON. Example: {"name":"Rasi"}',
-            provided: query.chart_type
+            provided: query.chart_type,
+            error: e.message
           }
         };
       }
@@ -351,6 +398,7 @@ async function prokeralaApiRequest(req, res, endpoint) {
     if (endpoint === 'chart') {
       params.chart_type = chartType;
       params.chart_style = query.chart_style;
+      params.format = query.format || 'svg';  // Default to svg format as required
 
       // Log exactly what's being sent to the API
       console.log('Final parameters being sent to Prokerala API:', {
@@ -490,25 +538,50 @@ export default async function handler(req, res) {
       let processedChartType = null;
       if (query.chart_type) {
         try {
-          // If it's an object, stringify it
-          if (typeof query.chart_type === 'object') {
-            processedChartType = JSON.stringify(query.chart_type);
-          } else {
-            // Try to parse if it's a string
-            try {
-              const parsed = JSON.parse(query.chart_type);
-              processedChartType = JSON.stringify(parsed);
-            } catch (parseError) {
-              // Handle the case where it might be a single string like "Rasi"
-              if (typeof query.chart_type === 'string' && query.chart_type.match(/^[A-Za-z]+$/)) {
-                processedChartType = JSON.stringify({ name: query.chart_type });
-              } else {
-                processedChartType = `Error parsing: ${parseError.message}`;
+          // If it's an object with a name property, extract the name
+          if (typeof query.chart_type === 'object' && query.chart_type.name) {
+            processedChartType = query.chart_type.name.toLowerCase();
+          } else if (typeof query.chart_type === 'string') {
+            // Try to parse as JSON if it looks like JSON
+            if (query.chart_type.includes('{') && query.chart_type.includes('"name"')) {
+              try {
+                const parsed = JSON.parse(query.chart_type);
+                if (parsed && parsed.name) {
+                  processedChartType = parsed.name.toLowerCase();
+                } else {
+                  throw new Error('Invalid JSON format for chart_type');
+                }
+              } catch (parseError) {
+                // If it contains quotes but isn't valid JSON, try to extract the name
+                const nameMatch = query.chart_type.match(/['"]name['"]:\s*['"]([^'"]+)['"]/);
+                if (nameMatch && nameMatch[1]) {
+                  processedChartType = nameMatch[1].toLowerCase();
+                } else {
+                  processedChartType = `Error parsing: ${parseError.message}`;
+                }
               }
+            } else {
+              // It's just a plain string value, use it directly (lowercase for consistency)
+              processedChartType = query.chart_type.toLowerCase();
             }
+          } else {
+            throw new Error('Invalid chart_type format');
+          }
+          
+          // Validate chart type
+          const validChartTypes = [
+            'rasi', 'navamsa', 'lagna', 'trimsamsa', 'drekkana', 'chaturthamsa', 
+            'dasamsa', 'ashtamsa', 'dwadasamsa', 'shodasamsa', 'hora', 
+            'akshavedamsa', 'shashtyamsa', 'panchamsa', 'khavedamsa', 
+            'saptavimsamsa', 'shashtamsa', 'chaturvimsamsa', 'saptamsa', 
+            'vimsamsa', 'upagraha', 'bhava', 'sun', 'moon'
+          ];
+          
+          if (!validChartTypes.includes(processedChartType)) {
+            processedChartType += ` (WARNING: Not in valid chart types list)`;
           }
         } catch (e) {
-          processedChartType = `Error parsing: ${e.message}`;
+          processedChartType = `Error processing: ${e.message}`;
         }
       }
       
@@ -557,6 +630,7 @@ export default async function handler(req, res) {
       if (path === 'chart') {
         finalParams.chart_type = processedChartType;
         finalParams.chart_style = query.chart_style;
+        finalParams.format = query.format || 'svg';
       }
       
       return res.status(200).json({
