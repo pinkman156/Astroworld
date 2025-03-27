@@ -13,12 +13,12 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
-    { "src": "/api/prokerala-proxy", "dest": "/api/prokerala-proxy.js" },
-    { "src": "/api/prokerala-proxy/(.*)", "dest": "/api/prokerala-proxy.js" },
-    { "src": "/api/geocode", "dest": "/api/geocode.js" },
-    { "src": "/api/together/chat", "dest": "/api/together-chat.js" },
-    { "src": "/(.*)", "dest": "/$1" }
+  "rewrites": [
+    { "source": "/api/prokerala-proxy", "destination": "/api/prokerala-proxy.js" },
+    { "source": "/api/prokerala-proxy/:path*", "destination": "/api/prokerala-proxy.js" },
+    { "source": "/api/geocode", "destination": "/api/geocode.js" },
+    { "source": "/api/together/chat", "destination": "/api/together-chat.js" },
+    { "source": "/(.*)", "destination": "/$1" }
   ],
   "env": {
     "VITE_API_BASE_URL": "https://astroworld-delta.vercel.app",
