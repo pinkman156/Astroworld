@@ -5,8 +5,16 @@ import { BirthData } from '../types';
 const PROKERALA_CLIENT_ID = import.meta.env.VITE_PROKERALA_CLIENT_ID || '';
 const PROKERALA_CLIENT_SECRET = import.meta.env.VITE_PROKERALA_CLIENT_SECRET || '';
 const PROKERALA_API_URL = 'https://api.prokerala.com/v2/astrology';
-// CORS proxy URL
-const CORS_PROXY_URL = 'http://localhost:8080/';
+
+// CORS Proxy URL that works in both development and production
+const getProxyUrl = () => {
+  // Check if we're in development or production
+  const isDevelopment = import.meta.env.DEV;
+  // Use localhost for development, Vercel serverless function for production
+  return isDevelopment 
+    ? 'http://localhost:8080/' 
+    : '/api/proxy?url=';
+};
 
 // Logger utility to control logging based on environment
 const logger = {
@@ -155,7 +163,7 @@ export const getCoordinates = async (place: string): Promise<string> => {
     // Using OpenStreetMap Nominatim API for geocoding via CORS proxy
     const response = await axios({
       method: 'GET',
-      url: `${CORS_PROXY_URL}https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(place)}&format=json`,
+      url: `${getProxyUrl()}https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(place)}&format=json`,
     });
     
     if (response.data && response.data.length > 0) {
@@ -187,7 +195,7 @@ export const getProkeralaToken = async (): Promise<string> => {
     logger.debug('Requesting new OAuth token...');
     const response = await axios({
       method: 'POST',
-      url: `${CORS_PROXY_URL}https://api.prokerala.com/token`,
+      url: `${getProxyUrl()}https://api.prokerala.com/token`,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
@@ -442,7 +450,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Make request to get planet positions via CORS proxy
         const planetResponse = await axios({
           method: 'GET',
-          url: `${CORS_PROXY_URL}${PROKERALA_API_URL}/planet-position`,
+          url: `${getProxyUrl()}${PROKERALA_API_URL}/planet-position`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -460,7 +468,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Also get kundli data via CORS proxy
         const kundliResponse = await axios({
           method: 'GET',
-          url: `${CORS_PROXY_URL}${PROKERALA_API_URL}/kundli`,
+          url: `${getProxyUrl()}${PROKERALA_API_URL}/kundli`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -479,7 +487,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Get advanced chart data
         const chartResponse = await axios({
           method: 'GET',
-          url: `${CORS_PROXY_URL}${PROKERALA_API_URL}/chart`,
+          url: `${getProxyUrl()}${PROKERALA_API_URL}/chart`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
