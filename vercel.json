@@ -8,6 +8,8 @@
     { "source": "/api/prokerala-kundli", "destination": "/api/prokerala-kundli.js" },
     { "source": "/api/prokerala-chart", "destination": "/api/prokerala-chart.js" },
     { "source": "/api/geocode", "destination": "/api/geocode.js" },
+    { "source": "/api/env-test", "destination": "/api/env-test.js" },
+    { "source": "/api/prokerala-test", "destination": "/api/prokerala-test.js" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "env": {
