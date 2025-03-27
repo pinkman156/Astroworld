@@ -6,7 +6,7 @@ import axios from 'axios';
 
 // Check if we're running locally or against the deployed URL
 const baseUrl = process.argv[2] === 'prod' 
-  ? 'https://astroworld-nine.vercel.app'
+  ? 'https://astroworld-rm6trlptb-pinkman156s-projects.vercel.app'
   : 'http://localhost:5174';
 
 console.log(`Testing proxy against: ${baseUrl}`);
@@ -41,7 +41,29 @@ async function testProxy() {
       
       if (planetResponse.data && !planetResponse.data.error) {
         console.log('✅ Successfully retrieved planet positions');
-        console.log('🎉 All tests passed! The proxy is working correctly.');
+        
+        // Test birth chart endpoint
+        console.log('3. Testing birth-chart endpoint...');
+        const birthChartResponse = await axios({
+          method: 'POST',
+          url: `${baseUrl}/api/chart/birth`,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          data: {
+            date: '2000-01-01',
+            time: '12:00',
+            place: 'New Delhi',
+            name: 'Test User'
+          }
+        });
+        
+        if (birthChartResponse.data && birthChartResponse.data.success) {
+          console.log('✅ Successfully retrieved birth chart');
+          console.log('🎉 All tests passed! The proxy is working correctly.');
+        } else {
+          console.error('❌ Failed to get birth chart:', birthChartResponse.data);
+        }
       } else {
         console.error('❌ Failed to get planet positions:', planetResponse.data.error || 'Unknown error');
       }

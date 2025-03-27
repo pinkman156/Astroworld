@@ -404,17 +404,17 @@ export const getMockBirthChart = (birthData: BirthData): BirthChartData => {
 export const getBirthChart = async (birthData: BirthData): Promise<BirthChartData> => {
   try {
     logger.debug('Getting birth chart for:', birthData);
-    
-    try {
-      // Get coordinates for the birth place
-      const coordinates = await getCoordinates(birthData.place);
-      logger.debug('Coordinates:', coordinates);
       
-      // Normalize and parse the birth date and time
-      const normalizedDate = normalizeDateFormat(birthData.date);
-      const normalizedTime = normalizeTimeFormat(birthData.time);
-      logger.debug('Normalized date and time:', normalizedDate, normalizedTime);
-      
+      try {
+        // Get coordinates for the birth place
+        const coordinates = await getCoordinates(birthData.place);
+        logger.debug('Coordinates:', coordinates);
+        
+        // Normalize and parse the birth date and time
+        const normalizedDate = normalizeDateFormat(birthData.date);
+        const normalizedTime = normalizeTimeFormat(birthData.time);
+        logger.debug('Normalized date and time:', normalizedDate, normalizedTime);
+        
       // Format datetime for API
       const formattedDateTime = `${normalizedDate}T${normalizedTime}:00+05:30`;
       logger.debug('Formatted datetime:', formattedDateTime);
@@ -423,13 +423,13 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
       const token = await getProkeralaToken();
       
       // Get planet positions
-      const planetResponse = await axios({
-        method: 'GET',
+        const planetResponse = await axios({
+          method: 'GET',
         url: `${API_SERVER_URL}/api/proxy/planet-position`,
-        headers: {
+          headers: {
           'Authorization': `Bearer ${token}`
-        },
-        params: {
+          },
+          params: {
           datetime: formattedDateTime,
           coordinates,
           ayanamsa: 1
@@ -437,13 +437,13 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
       });
       
       // Get kundli data
-      const kundliResponse = await axios({
-        method: 'GET',
+        const kundliResponse = await axios({
+          method: 'GET',
         url: `${API_SERVER_URL}/api/proxy/kundli`,
-        headers: {
+          headers: {
           'Authorization': `Bearer ${token}`
-        },
-        params: {
+          },
+          params: {
           datetime: formattedDateTime,
           coordinates,
           ayanamsa: 1
@@ -451,32 +451,32 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
       });
       
       // Get chart data
-      const chartResponse = await axios({
-        method: 'GET',
+        const chartResponse = await axios({
+          method: 'GET',
         url: `${API_SERVER_URL}/api/proxy/chart`,
-        headers: {
+          headers: {
           'Authorization': `Bearer ${token}`
-        },
-        params: {
+          },
+          params: {
           datetime: formattedDateTime,
           coordinates,
           ayanamsa: 1,
           chart_type: "rasi",
           chart_style: "north-indian"
-        }
-      }).catch(error => {
-        logger.error('Error fetching chart data:', error);
-        // Continue as we might still use planet positions
-        return { data: null };
-      });
-      
-      logger.debug('Received data from Prokerala API');
-      
+          }
+        }).catch(error => {
+          logger.error('Error fetching chart data:', error);
+          // Continue as we might still use planet positions
+          return { data: null };
+        });
+        
+        logger.debug('Received data from Prokerala API');
+        
       // Process planet data
       const planets = planetResponse.data.data.planets.map((planet: PlanetData) => ({
-        name: planet.name,
-        sign: planet.rasi.name,
-        position: planet.position,
+                name: planet.name,
+                sign: planet.rasi.name,
+                position: planet.position,
         isRetrograde: planet.is_retrograde
       }));
       

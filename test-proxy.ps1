@@ -3,7 +3,7 @@
 
 # Determine if we're testing against production or local
 if ($args[0] -eq "prod") {
-    $BASE_URL = "https://astroworld-nine.vercel.app"
+    $BASE_URL = "https://astroworld-rm6trlptb-pinkman156s-projects.vercel.app"
 } else {
     $BASE_URL = "http://localhost:5174"
 }
@@ -34,7 +34,32 @@ try {
             
             if ($planetResponse.data) {
                 Write-Host "✅ Successfully retrieved planet positions"
-                Write-Host "🎉 All tests passed! The proxy is working correctly."
+                
+                # Test birth chart endpoint
+                Write-Host "3. Testing birth-chart endpoint..."
+                try {
+                    $birthChartResponse = Invoke-RestMethod -Uri "$BASE_URL/api/chart/birth" `
+                        -Method Post `
+                        -ContentType "application/json" `
+                        -Body @{
+                            date = "2000-01-01"
+                            time = "12:00"
+                            place = "New Delhi"
+                            name = "Test User"
+                        } | ConvertTo-Json `
+                        -ErrorAction Stop
+                    
+                    if ($birthChartResponse.success) {
+                        Write-Host "✅ Successfully retrieved birth chart"
+                        Write-Host "🎉 All tests passed! The proxy is working correctly."
+                    } else {
+                        Write-Host "❌ Failed to get birth chart" -ForegroundColor Red
+                        $birthChartResponse | ConvertTo-Json -Depth 3
+                    }
+                } catch {
+                    Write-Host "❌ Error testing birth chart endpoint: $_" -ForegroundColor Red
+                    Write-Host $_.Exception.Response
+                }
             } else {
                 Write-Host "❌ Failed to get planet data" -ForegroundColor Red
                 $planetResponse | ConvertTo-Json -Depth 3

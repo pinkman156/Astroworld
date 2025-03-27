@@ -5,7 +5,7 @@
 
 # Determine if we're testing against production or local
 if [ "$1" = "prod" ]; then
-  BASE_URL="https://astroworld-nine.vercel.app"
+  BASE_URL="https://astroworld-rm6trlptb-pinkman156s-projects.vercel.app"
 else
   BASE_URL="http://localhost:5174"
 fi
@@ -34,7 +34,25 @@ if echo "$TOKEN_RESPONSE" | grep -q "access_token"; then
   # Check if we got planet data
   if echo "$PLANET_RESPONSE" | grep -q "planets"; then
     echo "✅ Successfully retrieved planet positions"
-    echo "🎉 All tests passed! The proxy is working correctly."
+    
+    # Test birth chart endpoint
+    echo "3. Testing birth-chart endpoint..."
+    BIRTH_CHART_RESPONSE=$(curl -s -X POST "$BASE_URL/api/chart/birth" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "date": "2000-01-01",
+        "time": "12:00",
+        "place": "New Delhi",
+        "name": "Test User"
+      }')
+    
+    if echo "$BIRTH_CHART_RESPONSE" | grep -q "success"; then
+      echo "✅ Successfully retrieved birth chart"
+      echo "🎉 All tests passed! The proxy is working correctly."
+    else
+      echo "❌ Failed to get birth chart:"
+      echo "$BIRTH_CHART_RESPONSE"
+    fi
   else
     echo "❌ Failed to get planet positions:"
     echo "$PLANET_RESPONSE"
