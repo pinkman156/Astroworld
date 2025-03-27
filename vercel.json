@@ -1,7 +1,10 @@
 {
   "version": 2,
   "public": true,
-  "rewrites": [],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api-server/server.js" },
+    { "source": "/(.*)", "destination": "/" }
+  ],
   "env": {
     "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
     "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
@@ -16,13 +19,16 @@
       "DEBUG": "true"
     }
   },
-  "functions": {
-    "api/*.js": {
-      "memory": 1024,
-      "maxDuration": 60,
-      "runtime": "@vercel/node@3.0.5"
+  "builds": [
+    {
+      "src": "api-server/server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build"
     }
-  },
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

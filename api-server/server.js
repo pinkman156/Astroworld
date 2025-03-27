@@ -26,17 +26,18 @@ app.get('/', (req, res) => {
 // OpenStreetMap geocoding endpoint
 app.get('/api/geocode', async (req, res) => {
   try {
-    const { q } = req.query;
+    // Accept both 'q' and 'place' parameters for compatibility
+    const query = req.query.q || req.query.place;
     
-    if (!q) {
-      return res.status(400).json({ error: 'Missing query parameter' });
+    if (!query) {
+      return res.status(400).json({ error: 'Missing query parameter. Use either "q" or "place".' });
     }
     
     const response = await axios({
       method: 'GET',
       url: `https://nominatim.openstreetmap.org/search`,
       params: {
-        q,
+        q: query,
         format: 'json'
       },
       headers: {
