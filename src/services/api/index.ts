@@ -266,17 +266,17 @@ class ApiService {
           
           console.log('Formatted ISO datetime for API request:', params.datetime);
           
-          // Handle chart_type parameter correctly
+          // Handle chart_type parameter correctly - CRITICAL FIX
+          // Always ensure chart_type is included for chart endpoint
           if (!params.chart_type) {
-            // Use a plain object - the API will stringify it correctly
-            params.chart_type = {"name": "Rasi"};
-          } else if (typeof params.chart_type === 'string' && params.chart_type.startsWith('{')) {
-            // If it's a JSON string, parse it to object
-            try {
-              params.chart_type = JSON.parse(params.chart_type);
-            } catch (e) {
-              console.error('Error parsing chart_type:', e);
-            }
+            // Use a properly formatted JSON string - not an object
+            params.chart_type = JSON.stringify({ name: "Rasi" });
+          } else if (typeof params.chart_type === 'object') {
+            // If it's an object, stringify it correctly
+            params.chart_type = JSON.stringify(params.chart_type);
+          } else if (typeof params.chart_type === 'string' && !params.chart_type.startsWith('{')) {
+            // If it's a string but not JSON, wrap it in JSON
+            params.chart_type = JSON.stringify({ name: params.chart_type });
           }
           
           // Always ensure chart_style is set
@@ -384,7 +384,7 @@ class ApiService {
         datetime: isoDateTime,
         coordinates,
         ayanamsa: 1, // Lahiri ayanamsa
-        chart_type: { name: "Rasi" }, // Send as object, not JSON string
+        chart_type: JSON.stringify({ name: "Rasi" }), // Make sure to stringify
         chart_style: 'north-indian'
       });
       
@@ -501,7 +501,7 @@ class ApiService {
           datetime: isoDateTime, // ISO format for chart endpoint
           coordinates: coordinates,
           ayanamsa: 1,
-          chart_type: { name: "Rasi" }, // Send as object, not JSON string
+          chart_type: JSON.stringify({ name: "Rasi" }), // Make sure to stringify
           chart_style: 'north-indian'
         }),
         
