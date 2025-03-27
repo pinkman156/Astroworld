@@ -1,0 +1,872 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AstrologyInsight as AstrologyInsightType, BirthData, VedicChart } from '../types';
+import VedicDashboard from './vedic-dashboard/VedicDashboard';
+import { mockVedicData } from '../data/mockVedicData';
+import api from '../services/api';
+// Import Material-UI components
+import { 
+  Box, 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  Typography, 
+  Grid, 
+  Paper,
+  Divider,
+  LinearProgress,
+  Button,
+  Dialog, DialogTitle, DialogContent, DialogActions, 
+  IconButton,
+  Alert
+} from '@mui/material';
+import LockIcon from '@mui/icons-material/Lock';
+import StarIcon from '@mui/icons-material/Star';
+import CloseIcon from '@mui/icons-material/Close';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import ErrorIcon from '@mui/icons-material/Error';
+
+// Constants for input validation
+const MAX_PLACE_LENGTH = 100;
+const MAX_NAME_LENGTH = 100;
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+interface AstrologyInsightProps {
+  insight: AstrologyInsightType;
+}
+
+// Utility functions for date and time validation
+const isValidDate = (dateStr: string): boolean => {
+  // First check format
+  if (!DATE_REGEX.test(dateStr)) {
+    return false;
+  }
+  
+  // Then check if it's a valid date
+  const date = new Date(dateStr);
+  return !isNaN(date.getTime());
+};
+
+const isValidTime = (timeStr: string): boolean => {
+  return TIME_REGEX.test(timeStr);
+};
+
+// Sanitize input to prevent XSS
+const sanitizeInput = (input: string): string => {
+  if (!input) return '';
+  
+  // Basic sanitization - remove HTML tags and limit length
+  return input
+    .replace(/<[^>]*>?/gm, '')
+    .trim();
+};
+
+const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
+  const [showFullAnalysis, setShowFullAnalysis] = useState<boolean>(false);
+  const [vedicData, setVedicData] = useState<VedicChart>(mockVedicData);
+  const [isLoadingVedicData, setIsLoadingVedicData] = useState<boolean>(false);
+  const [dataSource, setDataSource] = useState<'api' | 'mock' | 'cached'>('mock');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [openProDialog, setOpenProDialog] = useState<boolean>(false);
+  
+  // New state for validation errors modal
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [showValidationErrorModal, setShowValidationErrorModal] = useState<boolean>(false);
+  
+  // Use ref to track if data has been loaded to prevent duplicate API calls
+  const dataLoadedRef = useRef<boolean>(false);
+
+  // Extract birth details from the insight message
+  const extractBirthDetails = (): BirthData | null => {
+    if (!insight.message) return null;
+    
+    try {
+      // Extract birth details section from the message with a more precise regex
+      const birthDetailsSection = insight.message.match(/## Birth (?:Data|Details)([\s\S]*?)(?=##|$)/);
+      if (!birthDetailsSection) return null;
+      
+      const birthDetailsText = birthDetailsSection[1];
+      
+      // Extract specific details with more robust regex patterns
+      const nameMatch = birthDetailsText.match(/Name:\s*([^\r\n]{1,100})(?:\r?\n|-|$)/);
+      const dateMatch = birthDetailsText.match(/(?:Birth )?Date:\s*([^\r\n]{1,30})(?:\r?\n|-|$)/);
+      const timeMatch = birthDetailsText.match(/(?:Birth )?Time:\s*([^\r\n]{1,30})(?:\r?\n|-|$)/);
+      const placeMatch = birthDetailsText.match(/(?:Birth )?Place:\s*([^\r\n]{1,100})(?:\r?\n|-|$)/);
+      
+      // Sanitize and validate extracted values
+      // Make sure name is properly sanitized and non-empty
+      const name = nameMatch ? sanitizeInput(nameMatch[1]).substring(0, MAX_NAME_LENGTH) : '';
+      let rawDate = dateMatch ? sanitizeInput(dateMatch[1]) : '';
+      let rawTime = timeMatch ? sanitizeInput(timeMatch[1]).replace(' IST', '') : '';
+      const place = placeMatch ? sanitizeInput(placeMatch[1]).substring(0, MAX_PLACE_LENGTH) : '';
+      
+      // Process date to standardized format (YYYY-MM-DD)
+      let date = processDateToStandardFormat(rawDate);
+      
+      // Validate processed date
+      if (!date || !isValidDate(date)) {
+        console.error('Invalid date after processing:', date);
+        return null;
+      }
+      
+      // Process time to standardized format (HH:MM)
+      let time = processTimeToStandardFormat(rawTime);
+      
+      // Validate time format
+      if (!time || !isValidTime(time)) {
+        console.error('Invalid time format:', time);
+        return null;
+      }
+      
+      // Return birth details with all validated fields
+      // The name might be empty here, but we'll validate it in handleRevealCosmicBlueprint
+      return {
+        date,
+        time,
+        place,
+        name
+      };
+    } catch (error) {
+      console.error('Error extracting birth details:', error);
+      return null;
+    }
+  };
+  
+  /**
+   * Process various date formats to standard YYYY-MM-DD
+   * @param rawDate - The raw date string from input
+   * @returns Standardized date string or null if invalid
+   */
+  const processDateToStandardFormat = (rawDate: string): string | null => {
+    if (!rawDate) return null;
+    
+    // Clean the input
+    const cleanDate = rawDate.trim().replace(/\s+/g, ' ');
+    
+    // If already in YYYY-MM-DD format, validate and return
+    if (DATE_REGEX.test(cleanDate)) {
+      return isValidDate(cleanDate) ? cleanDate : null;
+    }
+    
+    try {
+      // Handle specific formats systematically
+      
+      // Year only: YYYY -> YYYY-06-15 (middle of year)
+      if (/^\d{4}$/.test(cleanDate)) {
+        const year = parseInt(cleanDate, 10);
+        // Validate year is reasonable (1700-2100)
+        if (year >= 1700 && year <= 2100) {
+          return `${year}-06-15`;
+        }
+        return null;
+      }
+      
+      // Month and year: "June 2000" -> 2000-06-15
+      if (/^[a-zA-Z]+\s+\d{4}$/.test(cleanDate)) {
+        const parts = cleanDate.split(' ');
+        const monthStr = parts[0];
+        const year = parseInt(parts[1], 10);
+        
+        // Validate year
+        if (year < 1700 || year > 2100) {
+          return null;
+        }
+        
+        const months = {
+          january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+          july: 7, august: 8, september: 9, october: 10, november: 11, december: 12
+        };
+        
+        const month = months[monthStr.toLowerCase() as keyof typeof months];
+        if (!month) return null;
+        
+        return `${year}-${month.toString().padStart(2, '0')}-15`;
+      }
+      
+      // MM/DD/YYYY
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(cleanDate)) {
+        const parts = cleanDate.split('/');
+        const month = parseInt(parts[0], 10);
+        const day = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        
+        // Basic validation
+        if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1700 || year > 2100) {
+          return null;
+        }
+        
+        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        return isValidDate(formattedDate) ? formattedDate : null;
+      }
+      
+      // DD-MM-YYYY
+      if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(cleanDate)) {
+        const parts = cleanDate.split('-');
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        
+        // Basic validation
+        if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1700 || year > 2100) {
+          return null;
+        }
+        
+        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        return isValidDate(formattedDate) ? formattedDate : null;
+      }
+      
+      // Month name format (e.g. "June 15, 2000")
+      if (/[a-zA-Z]+\s+\d{1,2},?\s+\d{4}/.test(cleanDate)) {
+        const date = new Date(cleanDate);
+        if (isNaN(date.getTime())) {
+          return null;
+        }
+        
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1; // getMonth() returns 0-11
+        const day = date.getDate();
+        
+        // Validate ranges
+        if (year < 1700 || year > 2100) {
+          return null;
+        }
+        
+        return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      }
+      
+      // Last resort: try Date parsing and validate result
+      const date = new Date(cleanDate);
+      if (!isNaN(date.getTime())) {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        
+        // Validate ranges
+        if (year < 1700 || year > 2100) {
+          return null;
+        }
+        
+        return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      }
+      
+      // If we couldn't parse the date in any recognized format
+      return null;
+      
+    } catch (error) {
+      console.error('Error processing date:', error);
+      return null;
+    }
+  };
+  
+  /**
+   * Process various time formats to standard HH:MM (24hr)
+   * @param rawTime - The raw time string from input
+   * @returns Standardized time string or null if invalid
+   */
+  const processTimeToStandardFormat = (rawTime: string): string | null => {
+    if (!rawTime) return null;
+    
+    // Clean the input
+    const cleanTime = rawTime.trim()
+      .replace(/\s+/g, ' ')
+      .replace(/\s*IST|EST|PST|UTC|GMT.*/i, ''); // Remove timezone indicators
+    
+    // If already in HH:MM format, validate and return
+    if (TIME_REGEX.test(cleanTime)) {
+      return cleanTime;
+    }
+    
+    try {
+      // Parse 12-hour format (e.g., "3:45 PM", "3:45PM", "3:45 p.m.")
+      const amPmMatch = cleanTime.match(/(\d{1,2}):(\d{2})(?:\s*)([AaPp][Mm]|[Aa]\.?[Mm]\.?|[Pp]\.?[Mm]\.?)/);
+      if (amPmMatch) {
+        let hours = parseInt(amPmMatch[1], 10);
+        const minutes = parseInt(amPmMatch[2], 10);
+        const period = amPmMatch[3].toLowerCase();
+        
+        // Validate hours and minutes
+        if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
+          return null;
+        }
+        
+        // Convert to 24-hour format
+        if (period.startsWith('p') && hours < 12) {
+          hours += 12;
+        } else if (period.startsWith('a') && hours === 12) {
+          hours = 0;
+        }
+        
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      }
+      
+      // Handle simple hour:minute format
+      const timeMatch = cleanTime.match(/^(\d{1,2})[^\d]*(\d{2})$/);
+      if (timeMatch) {
+        const hours = parseInt(timeMatch[1], 10);
+        const minutes = parseInt(timeMatch[2], 10);
+        
+        // Validate hours and minutes
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+          return null;
+        }
+        
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      }
+      
+      // If we couldn't parse the time in any recognized format
+      return null;
+      
+    } catch (error) {
+      console.error('Error processing time:', error);
+      return null;
+    }
+  };
+
+  // Handle revealing cosmic blueprint
+  const handleRevealCosmicBlueprint = () => {
+    setValidationErrors({
+      name: 'Name is required for a personalized cosmic analysis'
+    });
+    setShowValidationErrorModal(true);
+  };
+
+  // Close validation error modal
+  const handleCloseValidationErrorModal = () => {
+    setShowValidationErrorModal(false);
+  };
+
+  // Load Vedic chart data when user clicks to view the full analysis
+  useEffect(() => {
+    const loadVedicData = async () => {
+      // Only load data if:
+      // 1. User wants to see full analysis
+      // 2. We're not already loading data
+      // 3. We haven't already loaded data for this birth chart
+      if (showFullAnalysis && !isLoadingVedicData && !dataLoadedRef.current) {
+        setIsLoadingVedicData(true);
+        setErrorMessage(null);
+        
+        try {
+          // Extract birth details from the insight message
+          const birthDetails = extractBirthDetails();
+          
+          if (birthDetails) {
+            console.log('Fetching Vedic chart data with birth details:', birthDetails);
+            
+            // Validate birth details before making API call
+            if (!birthDetails.date || !isValidDate(birthDetails.date)) {
+              throw new Error('Invalid birth date format');
+            }
+            
+            if (!birthDetails.time || !isValidTime(birthDetails.time)) {
+              throw new Error('Invalid birth time format');
+            }
+            
+            if (!birthDetails.place || birthDetails.place.length > MAX_PLACE_LENGTH) {
+              throw new Error('Invalid birth place');
+            }
+            
+            // Clear any previous error
+            setErrorMessage(null);
+            
+            try {
+              // Get Vedic chart data from API (with caching)
+              const data = await api.getVedicChartData(birthDetails);
+              
+              // Set the Vedic data
+              setVedicData(data);
+              
+              // Determine if this is real API data or mock data
+              // We're checking a unique property that would only exist in mock data
+              const isMockData = 
+                data.birthChart.planets.some(p => p.id === 'sun' && p.sign === 9 && p.house === 9 && p.degree === 15.5) &&
+                data.dashas.currentMahadasha.planet === 'Saturn' &&
+                data.dashas.currentMahadasha.startDate === '2019-04-12';
+                
+              setDataSource(isMockData ? 'mock' : 'cached');
+              console.log('Data source identified as:', isMockData ? 'mock' : 'api/cached');
+              
+              // Mark data as loaded to prevent duplicate API calls
+              dataLoadedRef.current = true;
+            } catch (error) {
+              console.error('API error fetching Vedic chart data:', error);
+              setErrorMessage('Unable to generate astrological data. Using sample data instead.');
+              setVedicData(mockVedicData);
+              setDataSource('mock');
+            }
+          } else {
+            console.log('Could not extract birth details, using mock data');
+            setErrorMessage('Could not determine birth details from the reading. Using sample data instead.');
+            setVedicData(mockVedicData);
+            setDataSource('mock');
+          }
+        } catch (error) {
+          console.error('Error loading Vedic chart data:', error);
+          setErrorMessage('An error occurred while generating the cosmic analysis. Using sample data instead.');
+          setVedicData(mockVedicData);
+          setDataSource('mock');
+        } finally {
+          setIsLoadingVedicData(false);
+        }
+      }
+    };
+    
+    loadVedicData();
+  }, [showFullAnalysis, isLoadingVedicData, insight.message]);
+
+  // Reset loaded state when insight changes
+  useEffect(() => {
+    dataLoadedRef.current = false;
+    setDataSource('mock');
+    setErrorMessage(null);
+  }, [insight.message]);
+
+  // Form validation helper - can be used when direct user input is implemented
+  const validateBirthForm = (formData: BirthData): { isValid: boolean; errors: Record<string, string> } => {
+    const errors: Record<string, string> = {};
+    
+    // Validate date
+    if (!formData.date) {
+      errors.date = 'Birth date is required';
+    } else if (!isValidDate(formData.date)) {
+      errors.date = 'Invalid date format (must be YYYY-MM-DD)';
+    }
+    
+    // Validate time
+    if (!formData.time) {
+      errors.time = 'Birth time is required';
+    } else if (!isValidTime(formData.time)) {
+      errors.time = 'Invalid time format (must be HH:MM in 24-hour format)';
+    }
+    
+    // Validate place
+    if (!formData.place) {
+      errors.place = 'Birth place is required';
+    } else if (formData.place.length > MAX_PLACE_LENGTH) {
+      errors.place = `Place name is too long (maximum ${MAX_PLACE_LENGTH} characters)`;
+    }
+    
+    // Validate name (now required)
+    if (!formData.name || formData.name.trim() === '') {
+      errors.name = 'Name is required for a personalized cosmic analysis';
+    } else if (formData.name.length > MAX_NAME_LENGTH) {
+      errors.name = `Name is too long (maximum ${MAX_NAME_LENGTH} characters)`;
+    }
+    
+    return { 
+      isValid: Object.keys(errors).length === 0,
+      errors
+    };
+  };
+
+  // PRO Dialog handlers
+  const handleProDialogOpen = () => {
+    setOpenProDialog(true);
+  };
+  
+  const handleProDialogClose = () => {
+    setOpenProDialog(false);
+  };
+
+  // Loading state
+  if (insight.loading) {
+    return (
+      <div className="p-6 bg-astro-bg-tertiary/30 rounded-lg border border-astro-border-light">
+        <div className="flex items-center justify-center mb-5">
+          <div className="w-12 h-12 rounded-full border-2 border-astro-accent-primary/20 border-t-astro-accent-primary animate-spin"></div>
+        </div>
+        <p className="text-astro-text-secondary text-center">
+          Consulting the cosmic energies for your personalized insight...
+        </p>
+      </div>
+    );
+  }
+
+  // Error state
+  if (insight.error) {
+    return (
+      <div className="p-6 bg-astro-bg-tertiary/30 rounded-lg border border-red-500/30">
+        <div className="flex items-center mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center mr-4">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 7v6M12 17.01V17M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-red-500">Analysis Error</h3>
+        </div>
+        <p className="text-astro-text-secondary mb-4">
+          {insight.error}
+        </p>
+        <p className="text-astro-text-muted text-sm">
+          Please try again with different birth details.
+        </p>
+      </div>
+    );
+  }
+
+  // No message yet
+  if (!insight.message && !showFullAnalysis) {
+    return null;
+  }
+
+  return (
+    <>
+      <AnimatePresence mode="wait">
+        {!showFullAnalysis ? (
+          <motion.div
+            key="message"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="p-6 bg-astro-bg-tertiary/30 rounded-lg border border-astro-border-light relative overflow-hidden"
+          >
+            {/* Cosmic background effect */}
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute inset-0 opacity-10 bg-cover bg-center" style={{ 
+                backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'400\' height=\'400\' viewBox=\'0 0 800 800\'%3E%3Cg fill=\'none\' stroke=\'%23404\' stroke-width=\'1\'%3E%3Cpath d=\'M769 229L1037 260.9M927 880L731 737 520 660 309 538 40 599 295 764 126.5 879.5 40 599-197 493 102 382-31 229 126.5 79.5-69-63\'/%3E%3Cpath d=\'M-31 229L237 261 390 382 603 493 308.5 537.5 101.5 381.5M370 905L295 764\'/%3E%3Cpath d=\'M520 660L578 842 731 737 840 599 603 493 520 660 295 764 309 538 390 382 539 269 769 229 577.5 41.5 370 105 295 -36 126.5 79.5 237 261 102 382 40 599 -69 737 127 880\'/%3E%3C/g%3E%3C/svg%3E")',
+                backgroundSize: 'cover'
+              }}></div>
+              <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-astro-bg-tertiary/30 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-astro-bg-tertiary/30 to-transparent"></div>
+            </div>
+
+            <div className="relative z-10">
+              <Card elevation={3} sx={{ 
+                mb: 4, 
+                background: 'rgba(10, 15, 30, 0.75)',
+                backdropFilter: 'blur(12px)', 
+                border: '1px solid rgba(78, 75, 120, 0.35)',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.4)'
+              }}>
+                <CardHeader
+                  avatar={
+                    <div className="w-8 h-8 rounded-full bg-astro-accent-primary/20 flex items-center justify-center">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" 
+                          fill="#D4AF61" />
+                      </svg>
+                    </div>
+                  }
+                  title={<Typography variant="h5" sx={{ color: '#D4AF61', fontWeight: 500 }}>Astrological Analysis</Typography>}
+                  sx={{ py: 1.5, px: 2 }}
+                />
+                <CardContent sx={{ backgroundColor: 'rgba(13, 18, 35, 0.9)' }}>
+                  {insight.message && (
+                    <Box className="space-y-6">
+                      {/* Insert content sections here */}
+                    </Box>
+                  )}
+
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+                    <Button
+                      onClick={handleRevealCosmicBlueprint}
+                      sx={{
+                        px: 3,
+                        py: 1.25,
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(30, 62, 201, 0.6)',
+                        border: '1px solid rgba(78, 75, 120, 0.35)',
+                        color: 'white',
+                        textTransform: 'none',
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        '&:hover': {
+                          backgroundColor: 'rgba(30, 34, 52, 0.8)',
+                          boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)'
+                        }
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '8px' }}>
+                        <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
+                        <path d="M8 11V7a4 4 0 118 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      <span>Reveal Cosmic Blueprint</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-2">
+                        <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="full-analysis"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-astro-bg-tertiary/30 rounded-lg border border-astro-border-light overflow-hidden"
+          >
+            {/* Other content here */}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Validation Error Modal */}
+      <Dialog
+        open={showValidationErrorModal}
+        onClose={handleCloseValidationErrorModal}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          style: {
+            backgroundColor: 'rgba(17, 25, 40, 0.95)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: 16,
+            overflow: 'hidden',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            boxShadow: '0 0 20px rgba(239, 68, 68, 0.3)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          p: 2,
+          borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
+          background: 'linear-gradient(90deg, rgba(239, 68, 68, 0.2) 0%, rgba(153, 27, 27, 0.2) 100%)'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <ErrorIcon sx={{ color: '#EF4444', mr: 1 }} />
+            <Typography variant="h6" sx={{ color: '#EF4444' }}>
+              Validation Error
+            </Typography>
+          </Box>
+          <IconButton 
+            edge="end" 
+            color="inherit" 
+            onClick={handleCloseValidationErrorModal} 
+            aria-label="close"
+          >
+            <CloseIcon sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, bgcolor: 'rgba(13, 18, 30, 0.7)' }}>
+          <Box sx={{ mb: 2 }}>
+            <Alert 
+              severity="error" 
+              sx={{ 
+                bgcolor: 'rgba(239, 68, 68, 0.1)', 
+                color: 'white',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                '& .MuiAlert-icon': { color: '#EF4444' }
+              }}
+            >
+              <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                Please correct the following issues:
+              </Typography>
+            </Alert>
+          </Box>
+          <Box sx={{ mt: 3 }}>
+            {Object.entries(validationErrors).map(([field, message]) => (
+              <Box key={field} sx={{ 
+                mb: 2, 
+                p: 2, 
+                bgcolor: 'rgba(13, 18, 30, 0.8)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: 1
+              }}>
+                <Typography variant="subtitle2" sx={{ color: '#EF4444', mb: 0.5, textTransform: 'capitalize' }}>
+                  {field}:
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.9)' }}>
+                  {message}
+                </Typography>
+                {field === 'name' && (
+                  <Typography variant="body2" sx={{ mt: 1, color: 'rgba(255, 255, 255, 0.7)', fontStyle: 'italic' }}>
+                    Your name is essential for connecting your cosmic energy to the analysis.
+                  </Typography>
+                )}
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, bgcolor: 'rgba(13, 18, 30, 0.7)', borderTop: '1px solid rgba(239, 68, 68, 0.1)' }}>
+          <Button 
+            onClick={handleCloseValidationErrorModal} 
+            variant="contained"
+            sx={{ 
+              bgcolor: 'rgba(239, 68, 68, 0.8)', 
+              color: 'white',
+              '&:hover': {
+                bgcolor: 'rgba(220, 38, 38, 0.9)'
+              }
+            }}
+          >
+            Understood
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* PRO Features Dialog */}
+      <Dialog
+        open={openProDialog}
+        onClose={handleProDialogClose}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          style: {
+            backgroundColor: 'rgba(17, 25, 40, 0.95)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: 16,
+            overflow: 'hidden',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          p: 2,
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <StarIcon sx={{ color: '#FFD700', mr: 1 }} />
+            <Typography component="div" variant="h6" sx={{ color: 'white', fontWeight: 600 }}>
+              Upgrade to Astro Insights PRO
+            </Typography>
+          </Box>
+          <IconButton onClick={handleProDialogClose} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 3 }}>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ color: '#FFD700', mb: 1, fontWeight: 600 }}>
+              Unlock Your Complete Cosmic Potential
+            </Typography>
+            <Typography sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+              Gain access to enhanced astrological insights with our PRO version, designed for those who seek deeper cosmic understanding.
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ color: 'white', mb: 1.5, fontWeight: 600 }}>
+              Exclusive PRO Features:
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Paper sx={{ p: 2, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                  <Box sx={{ 
+                    width: 28, 
+                    height: 28, 
+                    borderRadius: '50%', 
+                    bgcolor: 'rgba(255, 215, 0, 0.2)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: '#FFD700',
+                    mr: 2
+                  }}>
+                    1
+                  </Box>
+                  <Box>
+                    <Typography sx={{ color: 'white', fontWeight: 500 }}>
+                      Complete Strength & Challenge Analysis
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}>
+                      Unlock all key strengths and potential challenges for complete self-understanding.
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+              
+              <Paper sx={{ p: 2, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                  <Box sx={{ 
+                    width: 28, 
+                    height: 28, 
+                    borderRadius: '50%', 
+                    bgcolor: 'rgba(255, 215, 0, 0.2)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: '#FFD700',
+                    mr: 2
+                  }}>
+                    2
+                  </Box>
+                  <Box>
+                    <Typography sx={{ color: 'white', fontWeight: 500 }}>
+                      Future Transit Predictions
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}>
+                      Get detailed predictions based on upcoming planetary movements.
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+              
+              <Paper sx={{ p: 2, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                  <Box sx={{ 
+                    width: 28, 
+                    height: 28, 
+                    borderRadius: '50%', 
+                    bgcolor: 'rgba(255, 215, 0, 0.2)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: '#FFD700',
+                    mr: 2
+                  }}>
+                    3
+                  </Box>
+                  <Box>
+                    <Typography sx={{ color: 'white', fontWeight: 500 }}>
+                      Personalized Compatibility Reports
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}>
+                      Analyze your relationship compatibility with friends, family, and romantic partners.
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Box>
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2.5, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <Button 
+            onClick={handleProDialogClose} 
+            sx={{ 
+              color: 'rgba(255, 255, 255, 0.7)', 
+              mr: 1,
+              '&:hover': {
+                color: 'white'
+              }
+            }}
+          >
+            Not Now
+          </Button>
+          <Button 
+            variant="contained" 
+            sx={{ 
+              background: 'linear-gradient(45deg, #FFD700, #FFA500)',
+              color: 'rgba(0, 0, 0, 0.8)',
+              fontWeight: 600,
+              px: 3,
+              '&:hover': {
+                background: 'linear-gradient(45deg, #FFB700, #FF8C00)',
+              }
+            }}
+          >
+            Upgrade to PRO
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+};
+
+export default AstrologyInsight; 
+

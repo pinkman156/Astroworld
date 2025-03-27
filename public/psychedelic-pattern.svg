@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="600" height="600" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#AD1DEB" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#FF5E7A" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#FFE44D" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="grad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFE44D" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#FF5E7A" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#AD1DEB" stop-opacity="0.5"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Spiral background -->
+  <g opacity="0.5">
+    <path d="M300,300 L350,250 A150,150 0 0,0 250,150 A200,200 0 0,0 150,250 A250,250 0 0,0 250,350 A300,300 0 0,0 350,250 A350,350 0 0,0 250,150" stroke="url(#grad1)" fill="none" stroke-width="2"/>
+    <path d="M300,300 L250,350 A150,150 0 0,0 350,450 A200,200 0 0,0 450,350 A250,250 0 0,0 350,250 A300,300 0 0,0 250,350 A350,350 0 0,0 350,450" stroke="url(#grad2)" fill="none" stroke-width="2"/>
+  </g>
+  
+  <!-- Concentric circles -->
+  <g opacity="0.3">
+    <circle cx="300" cy="300" r="50" stroke="#AD1DEB" fill="none" stroke-width="1"/>
+    <circle cx="300" cy="300" r="100" stroke="#FF5E7A" fill="none" stroke-width="1"/>
+    <circle cx="300" cy="300" r="150" stroke="#FFE44D" fill="none" stroke-width="1"/>
+    <circle cx="300" cy="300" r="200" stroke="#AD1DEB" fill="none" stroke-width="1"/>
+    <circle cx="300" cy="300" r="250" stroke="#FF5E7A" fill="none" stroke-width="1"/>
+    <circle cx="300" cy="300" r="300" stroke="#FFE44D" fill="none" stroke-width="1"/>
+  </g>
+  
+  <!-- Swirling lines -->
+  <g opacity="0.4">
+    <path d="M150,150 C250,50 350,150 450,50" stroke="#FFE44D" fill="none" stroke-width="2"/>
+    <path d="M150,250 C250,150 350,250 450,150" stroke="#FF5E7A" fill="none" stroke-width="2"/>
+    <path d="M150,350 C250,250 350,350 450,250" stroke="#AD1DEB" fill="none" stroke-width="2"/>
+    <path d="M150,450 C250,350 350,450 450,350" stroke="#FFE44D" fill="none" stroke-width="2"/>
+    <path d="M150,550 C250,450 350,550 450,450" stroke="#FF5E7A" fill="none" stroke-width="2"/>
+  </g>
+  
+  <!-- Star bursts -->
+  <g opacity="0.3">
+    <path d="M100,100 L120,80 L140,100 L120,120 Z" fill="#FFE44D"/>
+    <path d="M500,100 L520,80 L540,100 L520,120 Z" fill="#FF5E7A"/>
+    <path d="M100,500 L120,480 L140,500 L120,520 Z" fill="#FF5E7A"/>
+    <path d="M500,500 L520,480 L540,500 L520,520 Z" fill="#AD1DEB"/>
+  </g>
+  
+  <!-- Retro sunburst pattern -->
+  <g opacity="0.2" transform="translate(300, 300)">
+    <path d="M0,0 L40,0 L30,30 Z" fill="#FFE44D" transform="rotate(0)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#FF5E7A" transform="rotate(30)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#AD1DEB" transform="rotate(60)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#FFE44D" transform="rotate(90)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#FF5E7A" transform="rotate(120)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#AD1DEB" transform="rotate(150)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#FFE44D" transform="rotate(180)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#FF5E7A" transform="rotate(210)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#AD1DEB" transform="rotate(240)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#FFE44D" transform="rotate(270)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#FF5E7A" transform="rotate(300)"/>
+    <path d="M0,0 L40,0 L30,30 Z" fill="#AD1DEB" transform="rotate(330)"/>
+  </g>
+</svg> 

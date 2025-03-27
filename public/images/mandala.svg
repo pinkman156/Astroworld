@@ -1,0 +1,26 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g opacity="0.15">
+    <circle cx="100" cy="100" r="80" stroke="#B28F4C" stroke-width="1" />
+    <circle cx="100" cy="100" r="60" stroke="#B28F4C" stroke-width="1" />
+    <circle cx="100" cy="100" r="40" stroke="#B28F4C" stroke-width="1" />
+    
+    <!-- Decorative elements -->
+    <path d="M100 20V180" stroke="#B28F4C" stroke-width="0.5" />
+    <path d="M20 100H180" stroke="#B28F4C" stroke-width="0.5" />
+    <path d="M37.5736 37.5736L162.426 162.426" stroke="#B28F4C" stroke-width="0.5" />
+    <path d="M37.5736 162.426L162.426 37.5736" stroke="#B28F4C" stroke-width="0.5" />
+    
+    <!-- Small decorative dots -->
+    <circle cx="100" cy="20" r="2" fill="#B28F4C" />
+    <circle cx="100" cy="180" r="2" fill="#B28F4C" />
+    <circle cx="20" cy="100" r="2" fill="#B28F4C" />
+    <circle cx="180" cy="100" r="2" fill="#B28F4C" />
+    <circle cx="37.5736" cy="37.5736" r="2" fill="#B28F4C" />
+    <circle cx="162.426" cy="162.426" r="2" fill="#B28F4C" />
+    <circle cx="37.5736" cy="162.426" r="2" fill="#B28F4C" />
+    <circle cx="162.426" cy="37.5736" r="2" fill="#B28F4C" />
+    
+    <!-- Center decorative element -->
+    <circle cx="100" cy="100" r="5" fill="#B28F4C" opacity="0.3" />
+  </g>
+</svg> 

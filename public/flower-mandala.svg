@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="300" height="300" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="flowerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#AD1DEB" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="#FF5E7A" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#FFE44D" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Central circle -->
+  <circle cx="150" cy="150" r="20" fill="url(#flowerGrad)" opacity="0.8"/>
+  
+  <!-- Flower petals - Layer 1 -->
+  <g opacity="0.7">
+    <path d="M150,150 Q130,110 150,70 Q170,110 150,150" fill="#FFE44D" transform="rotate(0, 150, 150)"/>
+    <path d="M150,150 Q130,110 150,70 Q170,110 150,150" fill="#FF5E7A" transform="rotate(45, 150, 150)"/>
+    <path d="M150,150 Q130,110 150,70 Q170,110 150,150" fill="#AD1DEB" transform="rotate(90, 150, 150)"/>
+    <path d="M150,150 Q130,110 150,70 Q170,110 150,150" fill="#FFE44D" transform="rotate(135, 150, 150)"/>
+    <path d="M150,150 Q130,110 150,70 Q170,110 150,150" fill="#FF5E7A" transform="rotate(180, 150, 150)"/>
+    <path d="M150,150 Q130,110 150,70 Q170,110 150,150" fill="#AD1DEB" transform="rotate(225, 150, 150)"/>
+    <path d="M150,150 Q130,110 150,70 Q170,110 150,150" fill="#FFE44D" transform="rotate(270, 150, 150)"/>
+    <path d="M150,150 Q130,110 150,70 Q170,110 150,150" fill="#FF5E7A" transform="rotate(315, 150, 150)"/>
+  </g>
+  
+  <!-- Flower petals - Layer 2 -->
+  <g opacity="0.5">
+    <path d="M150,150 Q120,100 150,40 Q180,100 150,150" fill="#AD1DEB" transform="rotate(22.5, 150, 150)"/>
+    <path d="M150,150 Q120,100 150,40 Q180,100 150,150" fill="#FF5E7A" transform="rotate(67.5, 150, 150)"/>
+    <path d="M150,150 Q120,100 150,40 Q180,100 150,150" fill="#FFE44D" transform="rotate(112.5, 150, 150)"/>
+    <path d="M150,150 Q120,100 150,40 Q180,100 150,150" fill="#AD1DEB" transform="rotate(157.5, 150, 150)"/>
+    <path d="M150,150 Q120,100 150,40 Q180,100 150,150" fill="#FF5E7A" transform="rotate(202.5, 150, 150)"/>
+    <path d="M150,150 Q120,100 150,40 Q180,100 150,150" fill="#FFE44D" transform="rotate(247.5, 150, 150)"/>
+    <path d="M150,150 Q120,100 150,40 Q180,100 150,150" fill="#AD1DEB" transform="rotate(292.5, 150, 150)"/>
+    <path d="M150,150 Q120,100 150,40 Q180,100 150,150" fill="#FF5E7A" transform="rotate(337.5, 150, 150)"/>
+  </g>
+  
+  <!-- Decorative outer circle -->
+  <circle cx="150" cy="150" r="120" stroke="url(#flowerGrad)" stroke-width="2" fill="none" opacity="0.3"/>
+  
+  <!-- Decorative dots around the circle -->
+  <g opacity="0.6">
+    <circle cx="150" cy="30" r="4" fill="#FFE44D"/>
+    <circle cx="270" cy="150" r="4" fill="#FF5E7A"/>
+    <circle cx="150" cy="270" r="4" fill="#AD1DEB"/>
+    <circle cx="30" cy="150" r="4" fill="#FFE44D"/>
+    
+    <circle cx="226" cy="74" r="3" fill="#AD1DEB"/>
+    <circle cx="226" cy="226" r="3" fill="#FFE44D"/>
+    <circle cx="74" cy="226" r="3" fill="#FF5E7A"/>
+    <circle cx="74" cy="74" r="3" fill="#AD1DEB"/>
+  </g>
+  
+  <!-- Connecting lines -->
+  <g opacity="0.3" stroke-dasharray="3,3">
+    <line x1="150" y1="30" x2="150" y2="130" stroke="#FFE44D" stroke-width="1"/>
+    <line x1="270" y1="150" x2="170" y2="150" stroke="#FF5E7A" stroke-width="1"/>
+    <line x1="150" y1="270" x2="150" y2="170" stroke="#AD1DEB" stroke-width="1"/>
+    <line x1="30" y1="150" x2="130" y2="150" stroke="#FFE44D" stroke-width="1"/>
+    
+    <line x1="226" y1="74" x2="170" y2="130" stroke="#AD1DEB" stroke-width="1"/>
+    <line x1="226" y1="226" x2="170" y2="170" stroke="#FFE44D" stroke-width="1"/>
+    <line x1="74" y1="226" x2="130" y2="170" stroke="#FF5E7A" stroke-width="1"/>
+    <line x1="74" y1="74" x2="130" y2="130" stroke="#AD1DEB" stroke-width="1"/>
+  </g>
+</svg> 
