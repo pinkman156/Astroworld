@@ -2,7 +2,12 @@
   "version": 2,
   "public": true,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api-server/server.js" },
+    { "source": "/api/prokerala-token", "destination": "/api/prokerala-token.js" },
+    { "source": "/api/auth/prokerala", "destination": "/api/auth/prokerala.js" },
+    { "source": "/api/prokerala-planet-position", "destination": "/api/prokerala-planet-position.js" },
+    { "source": "/api/prokerala-kundli", "destination": "/api/prokerala-kundli.js" },
+    { "source": "/api/prokerala-chart", "destination": "/api/prokerala-chart.js" },
+    { "source": "/api/geocode", "destination": "/api/geocode.js" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "env": {
@@ -21,7 +26,7 @@
   },
   "builds": [
     {
-      "src": "api-server/server.js",
+      "src": "api/**/*.js",
       "use": "@vercel/node"
     },
     {
