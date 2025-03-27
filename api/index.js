@@ -2,9 +2,9 @@
 // This file serves as a backup entry point for API requests
 
 // Import handlers
-const geocodeHandler = require('./geocode');
-const prokeralaProxyHandler = require('./prokerala-proxy');
-const togetherChatHandler = require('./together-chat');
+import geocodeHandler from './geocode.js';
+import prokeralaProxyHandler from './prokerala-proxy.js';
+import togetherChatHandler from './together-chat.js';
 
 // CORS headers
 const corsHeaders = {
@@ -15,7 +15,7 @@ const corsHeaders = {
 };
 
 // Main handler
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   console.log('API request received:', req.url);
   
   // Handle CORS preflight
@@ -53,4 +53,4 @@ module.exports = async (req, res) => {
       message: error.message || 'An unknown error occurred'
     });
   }
-}; 
+} 

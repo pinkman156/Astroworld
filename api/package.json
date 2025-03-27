@@ -1,0 +1,10 @@
+{
+  "name": "astroworld-api",
+  "type": "module",
+  "private": true,
+  "version": "1.0.0",
+  "description": "API handlers for Astroworld",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 

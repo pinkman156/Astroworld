@@ -1,5 +1,5 @@
 // Serverless function for geocoding using OpenStreetMap
-const axios = require('axios');
+import axios from 'axios';
 
 // CORS headers for all responses
 const corsHeaders = {
@@ -25,7 +25,7 @@ const FALLBACK_LOCATIONS = {
 };
 
 // Geocoding API handler
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   console.log('Geocoding API called with query:', req.query);
   
   // Handle CORS preflight requests
@@ -120,4 +120,4 @@ module.exports = async (req, res) => {
       suggestion: 'Try a different location or check if the service is accessible'
     });
   }
-}; 
+} 

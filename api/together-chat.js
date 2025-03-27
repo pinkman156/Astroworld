@@ -1,5 +1,5 @@
 // Serverless function for the Together AI API
-const axios = require('axios');
+import axios from 'axios';
 
 // CORS headers for all responses
 const corsHeaders = {
@@ -34,7 +34,7 @@ function validateRequest(body) {
 }
 
 // Together AI Chat API handler
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return handleOptions(req, res);
@@ -106,4 +106,4 @@ module.exports = async (req, res) => {
       message: error.message
     });
   }
-}; 
+} 

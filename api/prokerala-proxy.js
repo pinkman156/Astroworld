@@ -1,5 +1,5 @@
 // Serverless function to proxy Prokerala API requests
-const axios = require('axios');
+import axios from 'axios';
 
 // Define rate limiting parameters
 const RATE_LIMIT = 50; // requests per minute
@@ -200,7 +200,7 @@ async function prokeralaApiRequest(req, res, endpoint) {
 }
 
 // Main request handler for serverless function
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Return early for OPTIONS requests (CORS preflight)
   if (req.method === 'OPTIONS') {
     return handleOptions(req, res);
@@ -240,4 +240,4 @@ module.exports = async (req, res) => {
   
   // Return response
   res.status(response.status).json(response.body);
-}; 
+} 
