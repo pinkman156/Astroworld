@@ -13,8 +13,8 @@
   },
   "functions": {
     "api/proxy.js": {
-      "memory": 512,
-      "maxDuration": 30
+      "memory": 1024,
+      "maxDuration": 60
     }
   },
   "headers": [
@@ -24,6 +24,14 @@
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, PUT, POST, DELETE, PATCH, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-Requested-With, Content-Type, Accept, Authorization" }
       ]
     }
   ]

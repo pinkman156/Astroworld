@@ -1,40 +1,60 @@
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const axios = require('axios');
 const { setup, send } = require('vercel-node-server');
 
 // Create a simple Express-like handler
 const app = setup();
 
 // Handle all proxy requests
-module.exports = (req, res) => {
-  // Extract the target URL from the request query parameter
-  const targetUrl = req.query.url;
-  
-  if (!targetUrl) {
-    return send(res, 400, { error: 'Missing URL parameter' });
-  }
-
-  // Create a new proxy for each request with the target URL
-  const proxy = createProxyMiddleware({
-    target: targetUrl,
-    changeOrigin: true,
-    pathRewrite: path => '',
-    onProxyReq: (proxyReq, req) => {
-      // Remove the url query parameter as it's not needed for the target
-      proxyReq.path = proxyReq.path.split('?')[0];
-      
-      // Log the proxied request in development
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`Proxying to ${targetUrl}`);
-      }
-    },
-    onError: (err, req, res) => {
-      console.error('Proxy error:', err);
-      send(res, 500, { error: `Proxy error: ${err.message}` });
+module.exports = async (req, res) => {
+  try {
+    // Extract the target URL from the request query parameter
+    const targetUrl = req.query.url;
+    
+    if (!targetUrl) {
+      return send(res, 400, { error: 'Missing URL parameter' });
     }
-  });
-  
-  // Handle the proxy request
-  proxy(req, res, () => {
-    send(res, 404, { error: 'Proxy not found' });
-  });
+
+    console.log('Proxying request to:', targetUrl);
+    
+    // Use axios to make the request - simpler than http-proxy-middleware
+    const response = await axios({
+      method: req.method,
+      url: targetUrl,
+      headers: {
+        // Forward necessary headers but remove host to avoid conflicts
+        ...req.headers,
+        host: undefined,
+        'user-agent': 'AstroInsightsApp/1.0'
+      },
+      // Forward request body for POST requests
+      data: req.method === 'POST' ? req.body : undefined,
+      // Handle redirects
+      maxRedirects: 5,
+      // Important: we want the full response with headers
+      validateStatus: () => true, // Don't throw on any status code
+    });
+
+    // Set response headers including CORS headers
+    const headers = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Content-Type': response.headers['content-type'] || 'application/json'
+    };
+
+    // Send the response with the same status code from the upstream server
+    return send(res, response.status, response.data, headers);
+  } catch (error) {
+    console.error('Proxy error:', error.message);
+    
+    // Detailed error message for debugging
+    const errorMessage = {
+      error: 'Proxy error',
+      message: error.message,
+      url: req.query.url,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    };
+    
+    return send(res, 500, errorMessage);
+  }
 }; 
