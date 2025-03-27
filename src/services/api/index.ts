@@ -153,31 +153,62 @@ class ApiService {
     try {
       console.log('Requesting new Prokerala API token...');
       
-      // Try different API endpoints if needed
-      let response;
-      try {
-        response = await this.client.post('/api/prokerala-proxy/token', {});
-      } catch (err: any) {
-        console.warn('Error with primary token endpoint:', err.message);
-        
-        // If we're in production, try a direct URL as a fallback
-        if (import.meta.env.MODE === 'production') {
-          console.log('Trying alternative token endpoint...');
+      // Define multiple possible token endpoints to try
+      const tokenEndpoints = [
+        '/api/prokerala-proxy/token',                               // Standard endpoint
+        'api/prokerala-proxy/token',                                // Without leading slash
+        '/prokerala-proxy/token',                                   // Alternative path
+        'https://astroworld-delta.vercel.app/api/prokerala-proxy/token' // Full URL
+      ];
+      
+      let response = null;
+      let lastError = null;
+      
+      // Try each endpoint until one works
+      for (const endpoint of tokenEndpoints) {
+        try {
+          console.log(`Trying token endpoint: ${endpoint}`);
           
-          // Try the backup URL if the primary one fails
-          try {
-            response = await axios.post('https://astroworld-delta.vercel.app/api/prokerala-proxy/token', {}, {
+          if (endpoint.startsWith('http')) {
+            // Use direct axios call for full URLs
+            response = await axios.post(endpoint, {}, {
               headers: {
                 'Content-Type': 'application/json',
               },
               timeout: 15000
             });
-          } catch (fallbackErr: any) {
-            console.error('Fallback token endpoint also failed:', fallbackErr.message);
-            throw new Error('All API token endpoints failed');
+          } else {
+            // Use the configured client for relative URLs
+            response = await this.client.post(endpoint, {});
           }
-        } else {
-          throw err; // In development, just propagate the original error
+          
+          // If we got a successful response, break the loop
+          if (response?.data?.access_token) {
+            console.log(`Successfully retrieved token from ${endpoint}`);
+            break;
+          }
+        } catch (err: any) {
+          lastError = err;
+          console.warn(`Error with token endpoint ${endpoint}:`, err.message);
+          // Continue to next endpoint
+        }
+      }
+      
+      // If we still don't have a response, try one more direct endpoint
+      if (!response?.data?.access_token) {
+        console.log('All standard endpoints failed, trying backup URL');
+        try {
+          response = await axios({
+            method: 'POST',
+            url: 'https://astroworld-delta.vercel.app/api/prokerala-proxy',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            timeout: 20000
+          });
+        } catch (finalErr: any) {
+          console.error('Backup token endpoint also failed:', finalErr.message);
+          throw new Error('All API token endpoints failed');
         }
       }
       

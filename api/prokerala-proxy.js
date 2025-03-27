@@ -70,57 +70,93 @@ function handleOptions(req, res) {
 // Get Prokerala OAuth token
 async function getProkeralaToken(req, res) {
   try {
-    // Get client credentials from environment variables
-    const clientId = process.env.VITE_PROKERALA_CLIENT_ID || process.env.PROKERALA_CLIENT_ID;
-    const clientSecret = process.env.VITE_PROKERALA_CLIENT_SECRET || process.env.PROKERALA_CLIENT_SECRET;
+    // Debug information about environment
+    console.log('Node environment:', process.env.NODE_ENV);
+    console.log('Environment variables available:', Object.keys(process.env).filter(key => key.includes('PROKERALA') || key.includes('VITE')));
     
-    if (!clientId || !clientSecret) {
-      console.error('Missing API credentials. Client ID:', !!clientId, 'Client Secret:', !!clientSecret);
+    // Get client credentials from environment variables - try multiple sources
+    const clientId = process.env.PROKERALA_CLIENT_ID || 
+                     process.env.VITE_PROKERALA_CLIENT_ID ||
+                     process.env.NEXT_PUBLIC_PROKERALA_CLIENT_ID;
+                     
+    const clientSecret = process.env.PROKERALA_CLIENT_SECRET || 
+                         process.env.VITE_PROKERALA_CLIENT_SECRET ||
+                         process.env.NEXT_PUBLIC_PROKERALA_CLIENT_SECRET;
+    
+    // This is a fallback for development and testing only
+    // IMPORTANT: Replace with your actual credentials for your own deployment
+    const fallbackId = "169_6kggk7ouf0w4wccs4skg80kgkws0kc";
+    const fallbackSecret = "1ukzhrd7u1c0sgkksgwo0ss84coc0wk8oows80gwkw8gc08kgs";
+    
+    // Use fallbacks in development only
+    const useDevFallbacks = process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'preview';
+    const effectiveClientId = clientId || (useDevFallbacks ? fallbackId : null);
+    const effectiveClientSecret = clientSecret || (useDevFallbacks ? fallbackSecret : null);
+    
+    if (!effectiveClientId || !effectiveClientSecret) {
+      console.error('Missing API credentials. Client ID present:', !!effectiveClientId, 'Client Secret present:', !!effectiveClientSecret);
       return {
         status: 500,
         headers: corsHeaders,
-        body: { error: 'Missing API credentials' }
+        body: { 
+          error: 'Missing API credentials',
+          message: 'The server is not properly configured with Prokerala API credentials.'
+        }
       };
     }
     
-    console.log('Getting Prokerala token with client ID:', clientId);
+    console.log('Getting Prokerala token with client ID:', effectiveClientId.substring(0, 5) + '...');
     
-    const response = await axios({
-      method: 'POST',
-      url: 'https://api.prokerala.com/token',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      data: new URLSearchParams({
-        'grant_type': 'client_credentials',
-        'client_id': clientId,
-        'client_secret': clientSecret
-      })
-    });
-    
-    return {
-      status: 200,
-      headers: corsHeaders,
-      body: response.data
-    };
+    try {
+      const response = await axios({
+        method: 'POST',
+        url: 'https://api.prokerala.com/token',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        data: new URLSearchParams({
+          'grant_type': 'client_credentials',
+          'client_id': effectiveClientId,
+          'client_secret': effectiveClientSecret
+        })
+      });
+      
+      console.log('Successfully retrieved Prokerala token');
+      
+      return {
+        status: 200,
+        headers: corsHeaders,
+        body: response.data
+      };
+    } catch (requestError) {
+      console.error('Error requesting Prokerala token:', requestError.message);
+      if (requestError.response) {
+        console.error('Prokerala API response:', requestError.response.status, requestError.response.data);
+      }
+      
+      // Forward the error response from Prokerala
+      if (requestError.response) {
+        return {
+          status: requestError.response.status,
+          headers: corsHeaders,
+          body: {
+            error: 'Authentication error with Prokerala API',
+            details: requestError.response.data
+          }
+        };
+      }
+      
+      throw requestError; // Let the outer catch block handle it
+    }
   } catch (error) {
     console.error('Prokerala token error:', error.message);
-    
-    // Forward the error response from Prokerala
-    if (error.response) {
-      return {
-        status: error.response.status,
-        headers: corsHeaders,
-        body: error.response.data
-      };
-    }
     
     return {
       status: 500,
       headers: corsHeaders,
       body: { 
         error: 'Authentication error',
-        message: error.message
+        message: error.message || 'Failed to authenticate with Prokerala API'
       }
     };
   }
@@ -201,6 +237,15 @@ async function prokeralaApiRequest(req, res, endpoint) {
 
 // Main request handler for serverless function
 export default async function handler(req, res) {
+  // Log the incoming request for debugging
+  console.log('Prokerala proxy request received:', {
+    url: req.url,
+    method: req.method,
+    headers: Object.keys(req.headers),
+    query: req.query,
+    body: req.method === 'POST' ? 'POST data present' : 'No POST data'
+  });
+  
   // Return early for OPTIONS requests (CORS preflight)
   if (req.method === 'OPTIONS') {
     return handleOptions(req, res);
@@ -209,11 +254,55 @@ export default async function handler(req, res) {
   // Check rate limit
   const rateLimitError = checkRateLimit(req, res);
   if (rateLimitError) {
-    return rateLimitError;
+    res.status(rateLimitError.status).json(rateLimitError.body);
+    return;
   }
   
   // Get the endpoint from the path
-  const path = req.url.replace(/^\/api\/prokerala-proxy\//, '');
+  let path = '';
+  
+  // Handle different URL formats
+  if (req.url.includes('?')) {
+    // Extract path before query parameters
+    path = req.url.split('?')[0];
+  } else {
+    path = req.url;
+  }
+  
+  // Remove any leading/trailing slashes and extract the endpoint
+  path = path.replace(/^\/+|\/+$/g, '');
+  
+  // Check for different possible path formats
+  if (path.startsWith('api/prokerala-proxy/')) {
+    path = path.replace('api/prokerala-proxy/', '');
+  } else if (path.startsWith('prokerala-proxy/')) {
+    path = path.replace('prokerala-proxy/', '');
+  } else if (path === 'api/prokerala-proxy' || path === 'prokerala-proxy') {
+    // Default to token for the base endpoint
+    path = 'token';
+  }
+  
+  console.log('Extracted endpoint path:', path);
+  
+  // Special case for token endpoint - also handle empty path as token
+  if (path === '' && req.method === 'POST') {
+    path = 'token';
+  }
+  
+  // Add health check endpoint
+  if (path === 'health' || path === 'ping') {
+    return res.status(200).json({
+      status: 'ok',
+      message: 'Prokerala proxy is operational',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'unknown',
+      serverInfo: {
+        nodejs: process.version,
+        vercel: process.env.VERCEL_ENV || 'not-vercel',
+        region: process.env.VERCEL_REGION || 'unknown'
+      }
+    });
+  }
   
   // Route to the appropriate handler
   let response;
@@ -229,7 +318,11 @@ export default async function handler(req, res) {
     response = {
       status: 404,
       headers: corsHeaders,
-      body: { error: 'Endpoint not found' }
+      body: { 
+        error: 'Endpoint not found',
+        message: `No handler found for path: ${path}`,
+        requestUrl: req.url
+      }
     };
   }
   
