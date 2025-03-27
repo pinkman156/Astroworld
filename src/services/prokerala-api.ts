@@ -192,10 +192,16 @@ export const getCoordinates = async (place: string): Promise<string> => {
 export const getProkeralaToken = async (): Promise<string> => {
   try {
     logger.debug('Requesting new OAuth token...');
-    // Will be handled by Express server
+    // Use the correct endpoint path
     const response = await axios({
       method: 'POST',
-      url: '/api/auth/prokerala',
+      url: '/api/prokerala-token',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      data: new URLSearchParams({
+        'grant_type': 'client_credentials'
+      })
     });
     
     if (response.data && response.data.access_token) {
