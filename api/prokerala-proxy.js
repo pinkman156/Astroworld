@@ -108,26 +108,26 @@ async function getProkeralaToken(req, res) {
     console.log('Getting Prokerala token with client ID:', effectiveClientId.substring(0, 5) + '...');
     
     try {
-      const response = await axios({
-        method: 'POST',
-        url: 'https://api.prokerala.com/token',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        data: new URLSearchParams({
-          'grant_type': 'client_credentials',
+    const response = await axios({
+      method: 'POST',
+      url: 'https://api.prokerala.com/token',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      data: new URLSearchParams({
+        'grant_type': 'client_credentials',
           'client_id': effectiveClientId,
           'client_secret': effectiveClientSecret
-        })
-      });
+      })
+    });
       
       console.log('Successfully retrieved Prokerala token');
-      
-      return {
-        status: 200,
-        headers: corsHeaders,
-        body: response.data
-      };
+    
+    return {
+      status: 200,
+      headers: corsHeaders,
+      body: response.data
+    };
     } catch (requestError) {
       console.error('Error requesting Prokerala token:', requestError.message);
       if (requestError.response) {
@@ -284,81 +284,64 @@ async function prokeralaApiRequest(req, res, endpoint) {
           headers: corsHeaders,
           body: { 
             error: 'Missing required parameter: chart_type',
-            message: 'chart_type is required for chart endpoint. Example: {"name":"Rasi"}'
+            message: 'chart_type is required for chart endpoint. Valid values include: rasi, navamsa, lagna, etc.'
           }
         };
       }
       
-      // Process chart_type into the required format: {"name":"ChartTypeName"}
+      // Extract and validate the chart_type
       try {
-        // If it's already an object with a name property
+        // If it's already an object with a name property, extract the name
         if (typeof query.chart_type === 'object' && query.chart_type.name) {
-          // Create the JSON object format required by Prokerala
-          chartType = JSON.stringify({ name: query.chart_type.name });
+          chartType = String(query.chart_type.name).toLowerCase();
         } else if (typeof query.chart_type === 'string') {
           // Try to parse if it looks like JSON
           if (query.chart_type.includes('{') && query.chart_type.includes('name')) {
             try {
-              // Try to parse and reformat to ensure valid JSON
               const parsedType = JSON.parse(query.chart_type);
               if (parsedType && parsedType.name) {
-                chartType = JSON.stringify({ name: parsedType.name });
+                chartType = String(parsedType.name).toLowerCase();
               } else {
                 throw new Error('Missing name property in JSON');
               }
             } catch (parseError) {
-              // If it has quotes but isn't valid JSON, try to extract the name
+              // If it contains quotes but isn't valid JSON, try to extract the name
               const nameMatch = query.chart_type.match(/['"]name['"]:\s*['"]([^'"]+)['"]/);
               if (nameMatch && nameMatch[1]) {
-                chartType = JSON.stringify({ name: nameMatch[1] });
+                chartType = nameMatch[1].toLowerCase();
               } else {
-                throw parseError;
+                // If it's not JSON, just use the string directly
+                chartType = query.chart_type.toLowerCase();
               }
             }
           } else {
-            // If it's just a plain string (like "Rasi"), wrap it in the expected format
-            chartType = JSON.stringify({ name: query.chart_type });
+            // It's just a plain string value, use it directly
+            chartType = query.chart_type.toLowerCase();
           }
         } else {
           throw new Error('Invalid chart_type format');
         }
         
-        // Validate the chart type against allowed values
-        try {
-          const parsedChartType = JSON.parse(chartType);
-          const chartTypeName = parsedChartType.name;
-          
-          // List of valid chart types (case insensitive matching)
-          const validChartTypes = [
-            'Rasi', 'Navamsa', 'Lagna', 'Trimsamsa', 'Drekkana', 'Chaturthamsa', 
-            'Dasamsa', 'Ashtamsa', 'Dwadasamsa', 'Shodasamsa', 'Hora', 
-            'Akshavedamsa', 'Shashtyamsa', 'Panchamsa', 'Khavedamsa', 
-            'Saptavimsamsa', 'Shashtamsa', 'Chaturvimsamsa', 'Saptamsa', 
-            'Vimsamsa', 'Upagraha', 'Bhava', 'Sun', 'Moon'
-          ];
-          
-          // Check if the chart type is valid (case insensitive)
-          const isValid = validChartTypes.some(
-            type => type.toLowerCase() === chartTypeName.toLowerCase()
-          );
-          
-          if (!isValid) {
-            return {
-              status: 400,
-              headers: corsHeaders,
-              body: { 
-                error: 'Invalid chart_type value',
-                message: `chart_type name must be one of: ${validChartTypes.join(', ')}`,
-                provided: query.chart_type
-              }
-            };
-          }
-          
-          // Ensure proper casing (first letter uppercase, rest lowercase)
-          const properCase = chartTypeName.charAt(0).toUpperCase() + chartTypeName.slice(1).toLowerCase();
-          chartType = JSON.stringify({ name: properCase });
-        } catch (e) {
-          throw new Error('Failed to validate chart type: ' + e.message);
+        // Validate the chart type is one of the allowed values
+        const validChartTypes = [
+          'rasi', 'navamsa', 'lagna', 'trimsamsa', 'drekkana', 'chaturthamsa', 
+          'dasamsa', 'ashtamsa', 'dwadasamsa', 'shodasamsa', 'hora', 
+          'akshavedamsa', 'shashtyamsa', 'panchamsa', 'khavedamsa', 
+          'saptavimsamsa', 'shashtamsa', 'chaturvimsamsa', 'saptamsa', 
+          'vimsamsa', 'upagraha', 'bhava', 'sun', 'moon'
+        ];
+        
+        if (!validChartTypes.includes(chartType)) {
+          return {
+            status: 400,
+            headers: corsHeaders,
+            body: { 
+              error: 'Invalid chart_type value',
+              message: `chart_type must be one of: ${validChartTypes.join(', ')}`,
+              provided: query.chart_type,
+              processed: chartType
+            }
+          };
         }
       } catch (e) {
         // If parsing fails, give clear error
@@ -367,9 +350,8 @@ async function prokeralaApiRequest(req, res, endpoint) {
           headers: corsHeaders,
           body: { 
             error: 'Invalid chart_type',
-            message: 'chart_type must be valid JSON. Example: {"name":"Rasi"}',
-            provided: query.chart_type,
-            error: e.message
+            message: 'chart_type must be a valid string value. Valid values include: rasi, navamsa, lagna, etc.',
+            provided: query.chart_type
           }
         };
       }
@@ -396,7 +378,14 @@ async function prokeralaApiRequest(req, res, endpoint) {
     
     // Add chart-specific parameters
     if (endpoint === 'chart') {
-      params.chart_type = chartType;
+      // CRITICAL FIX: Format chart_type as an object with name property
+      // First letter capitalized for proper formatting
+      const chartTypeName = chartType.charAt(0).toUpperCase() + chartType.slice(1).toLowerCase();
+      
+      // Instead of adding the chart_type as a string parameter, 
+      // create a proper JSON object directly in the params object
+      params.chart_type = { name: chartTypeName };
+      
       params.chart_style = query.chart_style;
       params.format = query.format || 'svg';  // Default to svg format as required
 
@@ -412,20 +401,20 @@ async function prokeralaApiRequest(req, res, endpoint) {
     
     // Make request to Prokerala API
     try {
-      const response = await axios({
-        method: 'GET',
-        url: `https://api.prokerala.com/v2/astrology/${endpoint}`,
-        params,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      return {
-        status: 200,
-        headers: corsHeaders,
-        body: response.data
-      };
+    const response = await axios({
+      method: 'GET',
+      url: `https://api.prokerala.com/v2/astrology/${endpoint}`,
+      params,
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    return {
+      status: 200,
+      headers: corsHeaders,
+      body: response.data
+    };
     } catch (apiError) {
       console.error(`Error from Prokerala API (${endpoint}):`, apiError.message);
       
@@ -543,7 +532,7 @@ export default async function handler(req, res) {
             processedChartType = query.chart_type.name.toLowerCase();
           } else if (typeof query.chart_type === 'string') {
             // Try to parse as JSON if it looks like JSON
-            if (query.chart_type.includes('{') && query.chart_type.includes('"name"')) {
+            if (query.chart_type.includes('{') && query.chart_type.includes('name')) {
               try {
                 const parsed = JSON.parse(query.chart_type);
                 if (parsed && parsed.name) {
@@ -557,7 +546,8 @@ export default async function handler(req, res) {
                 if (nameMatch && nameMatch[1]) {
                   processedChartType = nameMatch[1].toLowerCase();
                 } else {
-                  processedChartType = `Error parsing: ${parseError.message}`;
+                  // Just use the string directly
+                  processedChartType = query.chart_type.toLowerCase();
                 }
               }
             } else {
@@ -628,7 +618,13 @@ export default async function handler(req, res) {
       };
       
       if (path === 'chart') {
-        finalParams.chart_type = processedChartType;
+        // First letter capitalized for proper formatting
+        const chartTypeName = processedChartType ? 
+          processedChartType.charAt(0).toUpperCase() + processedChartType.slice(1).toLowerCase() : 
+          null;
+        
+        // Use object format instead of string
+        finalParams.chart_type = chartTypeName ? { name: chartTypeName } : processedChartType;
         finalParams.chart_style = query.chart_style;
         finalParams.format = query.format || 'svg';
       }
