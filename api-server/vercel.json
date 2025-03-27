@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/server.js",
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Accept, Authorization"
+      }
+    }
+  ],
+  "env": {
+    "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
+    "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
+    "VITE_TOGETHER_API_KEY": "${VITE_TOGETHER_API_KEY}",
+    "CORS_ORIGIN": "${CORS_ORIGIN}"
+  },
+  "public": true
+} 

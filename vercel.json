@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "public": true,
   "rewrites": [
     { "source": "/api/proxy", "destination": "/api/proxy" }
   ],
@@ -7,6 +8,7 @@
     "VITE_CORS_PROXY_URL": "/api/proxy?url=",
     "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
     "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
+    "VITE_TOGETHER_API_KEY": "${VITE_TOGETHER_API_KEY}",
     "DEBUG": "true"
   },
   "build": {
@@ -14,6 +16,7 @@
       "VITE_CORS_PROXY_URL": "/api/proxy?url=",
       "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
       "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
+      "VITE_TOGETHER_API_KEY": "${VITE_TOGETHER_API_KEY}",
       "DEBUG": "true"
     }
   },
@@ -22,11 +25,16 @@
       "memory": 1024,
       "maxDuration": 60,
       "runtime": "nodejs18.x"
+    },
+    "api/*.js": {
+      "memory": 1024,
+      "maxDuration": 60,
+      "runtime": "nodejs18.x"
     }
   },
   "headers": [
     {
-      "source": "/api/proxy",
+      "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
