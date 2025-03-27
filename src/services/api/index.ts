@@ -244,12 +244,30 @@ class ApiService {
       // Get a fresh token
       const token = await this.getProkeralaToken();
       
-      // IMPORTANT: Fix for double encoding issue
-      // Do NOT manually encode spaces in datetime - let axios handle the encoding properly
-      if (params.datetime) {
-        // Make sure any manually encoded spaces are decoded first to prevent double-encoding
-        params.datetime = decodeURIComponent(params.datetime);
-        console.log('Decoded datetime for API request:', params.datetime);
+      // IMPORTANT: Fix for datetime format requirements
+      if (params.datetime && endpoint === 'chart') {
+        // Convert to ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)
+        try {
+          // First ensure any URL encoding is properly handled
+          params.datetime = decodeURIComponent(params.datetime);
+          
+          // Convert space to 'T' and add timezone (+05:30 for IST)
+          // Example: 2000-06-15 10:15:00 => 2000-06-15T10:15:00+05:30
+          params.datetime = params.datetime.replace(' ', 'T') + '+05:30';
+          
+          console.log('Formatted ISO datetime for API request:', params.datetime);
+          
+          // Add required chart parameters if not present
+          if (!params.chart_type) {
+            params.chart_type = JSON.stringify({ name: 'Rasi' });
+          }
+          
+          if (!params.chart_style) {
+            params.chart_style = 'north-indian';
+          }
+        } catch (e) {
+          console.error('Error formatting datetime:', e);
+        }
       }
       
       // Make the API request
@@ -257,16 +275,6 @@ class ApiService {
         params,
         headers: {
           'Authorization': `Bearer ${token}`
-        },
-        paramsSerializer: {
-          encode: (value) => {
-            // Use simple encoding to avoid double encoding issues
-            if (typeof value === 'string') {
-              // Use encodeURIComponent but replace spaces with %20 instead of +
-              return encodeURIComponent(value).replace(/%20/g, '%20');
-            }
-            return String(value);
-          }
         }
       });
       
@@ -352,7 +360,9 @@ class ApiService {
       const chartResponse = await this.makeProkeralaRequest('chart', {
         datetime: formattedDateTime,
         coordinates,
-        ayanamsa: 1 // Lahiri ayanamsa
+        ayanamsa: 1, // Lahiri ayanamsa
+        chart_type: JSON.stringify({ name: 'Rasi' }),
+        chart_style: 'north-indian'
       });
       
       // Create the insight using Together AI
@@ -467,7 +477,9 @@ class ApiService {
         this.makeProkeralaRequest('chart', {
           datetime: formattedDateTime,
           coordinates: coordinates,
-          ayanamsa: 1
+          ayanamsa: 1,
+          chart_type: JSON.stringify({ name: 'Rasi' }),
+          chart_style: 'north-indian'
         }),
         
         // Get kundli

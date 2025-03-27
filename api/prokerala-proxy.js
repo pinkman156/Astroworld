@@ -170,7 +170,7 @@ async function prokeralaApiRequest(req, res, endpoint) {
     
     console.log('API request parameters:', query);
     
-    // Validate request
+    // Basic required parameters validation
     const validation = validateRequest(query, ['datetime', 'coordinates']);
     if (!validation.valid) {
       return {
@@ -178,6 +178,31 @@ async function prokeralaApiRequest(req, res, endpoint) {
         headers: corsHeaders,
         body: { error: validation.error }
       };
+    }
+    
+    // Additional validations for specific endpoints
+    if (endpoint === 'chart') {
+      if (!query.chart_type) {
+        return {
+          status: 400,
+          headers: corsHeaders,
+          body: { 
+            error: 'Missing required parameter: chart_type',
+            message: 'chart_type is required for chart endpoint. Example: {"name":"Rasi"}'
+          }
+        };
+      }
+      
+      if (!query.chart_style) {
+        return {
+          status: 400,
+          headers: corsHeaders,
+          body: { 
+            error: 'Missing required parameter: chart_style',
+            message: 'chart_style is required for chart endpoint. Example: "north-indian"'
+          }
+        };
+      }
     }
     
     if (!token) {
@@ -192,50 +217,58 @@ async function prokeralaApiRequest(req, res, endpoint) {
     let decodedDatetime = query.datetime;
     
     try {
-      // Check if the datetime is URL-encoded (contains %20 or +)
-      if (decodedDatetime.includes('%20') || decodedDatetime.includes('%25') || decodedDatetime.includes('+')) {
-        // Try to decode it to handle possible double encoding
-        try {
-          // First handle the case of double encoding (%2520)
-          if (decodedDatetime.includes('%25')) {
-            decodedDatetime = decodeURIComponent(decodedDatetime);
-          }
-          
-          // Then handle normal encoding
-          if (decodedDatetime.includes('%20') || decodedDatetime.includes('+')) {
-            decodedDatetime = decodeURIComponent(decodedDatetime);
-          }
-        } catch (e) {
-          // If decoding fails, just use the original value
-          console.warn('Error decoding datetime:', e.message);
+      // First decode any URL encoding
+      try {
+        decodedDatetime = decodeURIComponent(decodedDatetime);
+      } catch (e) {
+        console.warn('Error decoding datetime:', e.message);
+      }
+      
+      // Handle spaces and plus signs
+      decodedDatetime = decodedDatetime.replace(/\+/g, ' ');
+      
+      // For the chart endpoint, ensure ISO 8601 format with T and timezone
+      if (endpoint === 'chart') {
+        // If the datetime doesn't have a 'T', add it (replacing space if needed)
+        if (!decodedDatetime.includes('T')) {
+          decodedDatetime = decodedDatetime.replace(' ', 'T');
         }
         
-        console.log('Decoded datetime:', decodedDatetime);
-      }
-      
-      // Replace any remaining + with spaces
-      if (decodedDatetime.includes('+')) {
-        decodedDatetime = decodedDatetime.replace(/\+/g, ' ');
-      }
-      
-      // Verify the datetime is in the correct format: YYYY-MM-DD HH:MM:SS
-      const datetimeRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
-      if (!datetimeRegex.test(decodedDatetime)) {
-        console.error('Invalid datetime format after decoding:', decodedDatetime);
-        return {
-          status: 400,
-          headers: corsHeaders,
-          body: { 
-            error: 'Invalid datetime format',
-            message: 'Datetime must be in format: YYYY-MM-DD HH:MM:SS',
-            provided: decodedDatetime
-          }
-        };
-      }
-      
-      // Ensure the datetime ends with seconds
-      if (!decodedDatetime.match(/:\d{2}$/)) {
-        decodedDatetime += ':00';
+        // If there's no timezone specified, add IST (+05:30)
+        if (!decodedDatetime.match(/[+-]\d{2}:\d{2}$/)) {
+          decodedDatetime += '+05:30';
+        }
+        
+        console.log('Converted to ISO 8601 format:', decodedDatetime);
+      } else {
+        // For other endpoints, use the standard format
+        // Replace any 'T' with a space for standard format
+        if (decodedDatetime.includes('T')) {
+          decodedDatetime = decodedDatetime.replace('T', ' ');
+        }
+        
+        // Remove timezone information if present
+        decodedDatetime = decodedDatetime.replace(/[+-]\d{2}:\d{2}$/, '');
+        
+        // Verify standard datetime format: YYYY-MM-DD HH:MM:SS
+        const standardDatetimeRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
+        if (!standardDatetimeRegex.test(decodedDatetime)) {
+          console.error('Invalid standard datetime format after decoding:', decodedDatetime);
+          return {
+            status: 400,
+            headers: corsHeaders,
+            body: { 
+              error: 'Invalid datetime format',
+              message: 'Datetime must be in format: YYYY-MM-DD HH:MM:SS',
+              provided: decodedDatetime
+            }
+          };
+        }
+        
+        // Ensure the datetime ends with seconds
+        if (!decodedDatetime.match(/:\d{2}$/)) {
+          decodedDatetime += ':00';
+        }
       }
     } catch (datetimeError) {
       console.error('Error processing datetime parameter:', datetimeError);
