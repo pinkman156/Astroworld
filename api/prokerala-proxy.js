@@ -188,14 +188,65 @@ async function prokeralaApiRequest(req, res, endpoint) {
       };
     }
     
-    // Ensure datetime is properly decoded
+    // Fix any encoding issues with datetime
     let decodedDatetime = query.datetime;
     
-    // If datetime contains a '+' character, it might be an encoded space
-    if (decodedDatetime.includes('+')) {
-      // Replace '+' with space for proper formatting
-      decodedDatetime = decodedDatetime.replace(/\+/g, ' ');
-      console.log('Decoded datetime:', decodedDatetime);
+    try {
+      // Check if the datetime is URL-encoded (contains %20 or +)
+      if (decodedDatetime.includes('%20') || decodedDatetime.includes('%25') || decodedDatetime.includes('+')) {
+        // Try to decode it to handle possible double encoding
+        try {
+          // First handle the case of double encoding (%2520)
+          if (decodedDatetime.includes('%25')) {
+            decodedDatetime = decodeURIComponent(decodedDatetime);
+          }
+          
+          // Then handle normal encoding
+          if (decodedDatetime.includes('%20') || decodedDatetime.includes('+')) {
+            decodedDatetime = decodeURIComponent(decodedDatetime);
+          }
+        } catch (e) {
+          // If decoding fails, just use the original value
+          console.warn('Error decoding datetime:', e.message);
+        }
+        
+        console.log('Decoded datetime:', decodedDatetime);
+      }
+      
+      // Replace any remaining + with spaces
+      if (decodedDatetime.includes('+')) {
+        decodedDatetime = decodedDatetime.replace(/\+/g, ' ');
+      }
+      
+      // Verify the datetime is in the correct format: YYYY-MM-DD HH:MM:SS
+      const datetimeRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/;
+      if (!datetimeRegex.test(decodedDatetime)) {
+        console.error('Invalid datetime format after decoding:', decodedDatetime);
+        return {
+          status: 400,
+          headers: corsHeaders,
+          body: { 
+            error: 'Invalid datetime format',
+            message: 'Datetime must be in format: YYYY-MM-DD HH:MM:SS',
+            provided: decodedDatetime
+          }
+        };
+      }
+      
+      // Ensure the datetime ends with seconds
+      if (!decodedDatetime.match(/:\d{2}$/)) {
+        decodedDatetime += ':00';
+      }
+    } catch (datetimeError) {
+      console.error('Error processing datetime parameter:', datetimeError);
+      return {
+        status: 400,
+        headers: corsHeaders,
+        body: { 
+          error: 'Invalid datetime parameter',
+          message: datetimeError.message
+        }
+      };
     }
     
     // Construct query parameters

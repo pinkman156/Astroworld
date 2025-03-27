@@ -244,11 +244,12 @@ class ApiService {
       // Get a fresh token
       const token = await this.getProkeralaToken();
       
-      // Ensure datetime is properly formatted for URL
+      // IMPORTANT: Fix for double encoding issue
+      // Do NOT manually encode spaces in datetime - let axios handle the encoding properly
       if (params.datetime) {
-        // Make sure spaces are properly encoded
-        params.datetime = params.datetime.replace(/ /g, '%20');
-        console.log('Formatted datetime for API request:', params.datetime);
+        // Make sure any manually encoded spaces are decoded first to prevent double-encoding
+        params.datetime = decodeURIComponent(params.datetime);
+        console.log('Decoded datetime for API request:', params.datetime);
       }
       
       // Make the API request
@@ -256,6 +257,16 @@ class ApiService {
         params,
         headers: {
           'Authorization': `Bearer ${token}`
+        },
+        paramsSerializer: {
+          encode: (value) => {
+            // Use simple encoding to avoid double encoding issues
+            if (typeof value === 'string') {
+              // Use encodeURIComponent but replace spaces with %20 instead of +
+              return encodeURIComponent(value).replace(/%20/g, '%20');
+            }
+            return String(value);
+          }
         }
       });
       
