@@ -109,8 +109,28 @@ export const getProkeralaToken = async () => {
     logger.debug('Requesting new OAuth token...');
     
     // Get credentials from environment variables
-    const clientId = import.meta.env.VITE_PROKERALA_CLIENT_ID;
-    const clientSecret = import.meta.env.VITE_PROKERALA_CLIENT_SECRET;
+    let clientId = import.meta.env.VITE_PROKERALA_CLIENT_ID;
+    let clientSecret = import.meta.env.VITE_PROKERALA_CLIENT_SECRET;
+    
+    // Check if environment variables are properly set
+    const usingEnvVars = !!clientId && !!clientSecret && !clientId.startsWith('${') && !clientSecret.startsWith('${');
+    
+    // Log environment variable status
+    logger.debug('Using environment variables:', usingEnvVars);
+    
+    // If environment variables are not set correctly, try different formats
+    if (!usingEnvVars) {
+      // Try process.env format (if vite.config.ts is configured)
+      if (process.env && process.env.VITE_PROKERALA_CLIENT_ID) {
+        clientId = process.env.VITE_PROKERALA_CLIENT_ID;
+        clientSecret = process.env.VITE_PROKERALA_CLIENT_SECRET;
+        logger.debug('Falling back to process.env variables');
+      } else {
+        // Log warning about missing credentials
+        logger.warn('Environment variables not properly set for Prokerala API');
+        logger.warn('You must set VITE_PROKERALA_CLIENT_ID and VITE_PROKERALA_CLIENT_SECRET in your Vercel project');
+      }
+    }
     
     // Create data with credentials
     const data = new URLSearchParams({
@@ -121,6 +141,7 @@ export const getProkeralaToken = async () => {
     
     logger.debug('Client ID exists:', !!clientId, 'Client Secret exists:', !!clientSecret);
     
+    // Make token request to the backend API
     const response = await axios({
       method: 'POST',
       url: getFullApiUrl(API_ENDPOINTS.PROKERALA_TOKEN),

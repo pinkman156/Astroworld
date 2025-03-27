@@ -12,20 +12,6 @@
     { "source": "/api/geocode", "destination": "/api/api-handler.js" },
     { "source": "/(.*)", "destination": "/" }
   ],
-  "env": {
-    "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
-    "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
-    "VITE_TOGETHER_API_KEY": "${VITE_TOGETHER_API_KEY}",
-    "DEBUG": "true"
-  },
-  "build": {
-    "env": {
-      "VITE_PROKERALA_CLIENT_ID": "${VITE_PROKERALA_CLIENT_ID}",
-      "VITE_PROKERALA_CLIENT_SECRET": "${VITE_PROKERALA_CLIENT_SECRET}",
-      "VITE_TOGETHER_API_KEY": "${VITE_TOGETHER_API_KEY}",
-      "DEBUG": "true"
-    }
-  },
   "builds": [
     {
       "src": "api/prokerala-api.js",
