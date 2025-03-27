@@ -6,8 +6,28 @@ export default async function handler(req, res) {
   const path = req.url.split('?')[0];
   const endpoint = path.replace(/^\/api\//, '');
   
+  // Ensure request body is properly parsed
+  let parsedBody = req.body;
+  if (req.body && typeof req.body === 'string' && req.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
+    try {
+      // Parse URL encoded form data
+      const params = new URLSearchParams(req.body);
+      parsedBody = {};
+      for (const [key, value] of params.entries()) {
+        parsedBody[key] = value;
+      }
+      req.body = parsedBody;
+    } catch (error) {
+      console.error('Error parsing form data:', error);
+    }
+  }
+  
   // Log incoming request for debugging
-  console.log(`[Prokerala API] Processing ${req.method} request to ${endpoint}`);
+  console.log(`[Prokerala API] Processing ${req.method} request to ${endpoint}`, {
+    contentType: req.headers['content-type'],
+    bodyType: typeof req.body,
+    parsedBodyKeys: req.body ? Object.keys(req.body) : []
+  });
   
   // Get credentials (try multiple formats)
   const clientId = 
@@ -63,19 +83,68 @@ async function handleProkeralaToken(req, res, clientId, clientSecret) {
   }
 
   try {
-    // Log for debugging
-    console.log('Token request with credentials:', {
-      clientIdExists: !!clientId,
-      clientIdLength: clientId ? clientId.length : 0,
-      clientSecretExists: !!clientSecret
+    // Try to get credentials from multiple sources
+    // 1. Environment variables (multiple possible formats)
+    // 2. Request body (client can provide credentials directly)
+    let requestClientId = clientId;
+    let requestClientSecret = clientSecret;
+    
+    // Check request body for credentials as fallback
+    try {
+      const body = req.body;
+      if (body && body.client_id && body.client_secret) {
+        requestClientId = body.client_id;
+        requestClientSecret = body.client_secret;
+        console.log('Using credentials from request body');
+      } else if (typeof req.body === 'string') {
+        // Try to parse URL encoded form data
+        const params = new URLSearchParams(req.body);
+        if (params.has('client_id') && params.has('client_secret')) {
+          requestClientId = params.get('client_id');
+          requestClientSecret = params.get('client_secret');
+          console.log('Using credentials from URL encoded form data');
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing request body:', e.message);
+    }
+    
+    // Debug information (no sensitive data logged)
+    console.log('Token request debug:', {
+      clientIdFromEnv: !!clientId,
+      clientIdFromRequest: !!requestClientId,
+      clientIdIsUUID: requestClientId ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestClientId) : false,
+      secretFromEnv: !!clientSecret,
+      secretFromRequest: !!requestClientSecret,
+      envVars: Object.keys(process.env).filter(k => k.includes('PROKERALA') || k.includes('VITE_')),
+      method: req.method,
+      contentType: req.headers['content-type'],
+      bodyType: typeof req.body,
+      hasBody: !!req.body
     });
     
-    if (!clientId || !clientSecret) {
+    if (!requestClientId || !requestClientSecret) {
       return res.status(500).json({ 
-        error: 'Missing API credentials'
+        error: 'Missing API credentials',
+        debug: {
+          clientIdExists: !!requestClientId,
+          secretExists: !!requestClientSecret,
+          envVars: Object.keys(process.env).filter(k => k.includes('PROKERALA') || k.includes('VITE_')),
+          help: "Make sure VITE_PROKERALA_CLIENT_ID and VITE_PROKERALA_CLIENT_SECRET are set in your Vercel environment variables"
+        }
       });
     }
     
+    // Check if client ID is a valid UUID
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestClientId)) {
+      return res.status(400).json({
+        error: 'Invalid client ID format',
+        message: 'The client ID must be a valid UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)',
+        help: "Check your Prokerala API credentials - the client ID should be in UUID format"
+      });
+    }
+    
+    // Make the actual request to Prokerala API
     const response = await axios({
       method: 'POST',
       url: 'https://api.prokerala.com/token',
@@ -84,20 +153,42 @@ async function handleProkeralaToken(req, res, clientId, clientSecret) {
       },
       data: new URLSearchParams({
         'grant_type': 'client_credentials',
-        'client_id': clientId,
-        'client_secret': clientSecret
+        'client_id': requestClientId,
+        'client_secret': requestClientSecret
       })
     });
     
-    return res.status(200).json(response.data);
+    // Add debugging info to successful response
+    return res.status(200).json({
+      ...response.data,
+      debug: {
+        message: "Token successfully retrieved from Prokerala API",
+        usingEnvVars: requestClientId === clientId
+      }
+    });
   } catch (error) {
+    console.error('Prokerala token error:', error.message);
+    
+    // Enhanced error handling
     if (error.response) {
-      return res.status(error.response.status).json(error.response.data);
+      // Forward Prokerala error with diagnostics
+      const responseData = error.response.data;
+      return res.status(error.response.status).json({
+        ...responseData,
+        debug: {
+          message: "Error from Prokerala API",
+          status: error.response.status,
+          error: error.message,
+          help: "This error came directly from the Prokerala API. Verify your client ID and secret."
+        }
+      });
     }
     
+    // General error
     return res.status(500).json({ 
       error: 'Authentication error',
-      message: error.message
+      message: error.message,
+      help: "If this persists, try adding your Prokerala credentials directly in the request body."
     });
   }
 }

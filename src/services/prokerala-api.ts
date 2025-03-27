@@ -192,16 +192,27 @@ export const getCoordinates = async (place: string): Promise<string> => {
 export const getProkeralaToken = async (): Promise<string> => {
   try {
     logger.debug('Requesting new OAuth token...');
-    // Use the correct endpoint path
+    
+    // Create data with client credentials
+    const data = new URLSearchParams({
+      'grant_type': 'client_credentials'
+    });
+    
+    // Optional: Add credentials directly to request as fallback
+    // Only use this for debugging when server environment vars aren't working
+    // const clientId = 'your-prokerala-client-id';  // Replace with actual ID
+    // const clientSecret = 'your-prokerala-client-secret';  // Replace with actual secret
+    // data.append('client_id', clientId);
+    // data.append('client_secret', clientSecret);
+    
+    // Make the request to the token endpoint
     const response = await axios({
       method: 'POST',
       url: '/api/prokerala-token',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      data: new URLSearchParams({
-        'grant_type': 'client_credentials'
-      })
+      data
     });
     
     if (response.data && response.data.access_token) {
@@ -212,11 +223,24 @@ export const getProkeralaToken = async (): Promise<string> => {
     throw new Error('Failed to get access token from response');
   } catch (error: any) {
     logger.error('Error getting Prokerala token:', error);
+    
+    // Enhanced error handling with more details
     if (error.response) {
-      throw new Error(`Authentication error: ${error.response.status} - ${error.response.data?.error || error.response.statusText}`);
+      const status = error.response.status;
+      const data = error.response.data;
+      
+      // Check for specific error types
+      if (status === 401) {
+        throw new Error(`Authentication failed: Please verify your Prokerala API credentials. ${data?.errors?.[0]?.detail || ''}`);
+      } else if (status === 500) {
+        throw new Error('Server error: The API server encountered an internal error');
+      }
+      
+      throw new Error(`API error: ${status} - ${data?.errors?.[0]?.detail || error.response.statusText}`);
     } else if (error.request) {
-      throw new Error('Cannot connect to authentication service. Please check your network connection.');
+      throw new Error('Cannot connect to authentication service. Please check your network connection or try again later.');
     }
+    
     throw error;
   }
 };
