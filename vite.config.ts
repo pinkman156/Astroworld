@@ -12,15 +12,15 @@ export default defineConfig(({ mode }) => {
       // Make environment variables available via process.env 
       'process.env.VITE_PROKERALA_CLIENT_ID': JSON.stringify(env.VITE_PROKERALA_CLIENT_ID || ''),
       'process.env.VITE_PROKERALA_CLIENT_SECRET': JSON.stringify(env.VITE_PROKERALA_CLIENT_SECRET || ''),
-      'process.env.VITE_TOGETHER_API_KEY': JSON.stringify(env.VITE_TOGETHER_API_KEY || '')
+      'process.env.VITE_TOGETHER_API_KEY': JSON.stringify(env.VITE_TOGETHER_API_KEY || ''),
+      'process.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL || '')
     },
     server: {
       // Configure proxy for development server
       proxy: {
         // Proxy API requests to our serverless API handler
-        '/api/proxy': {
-          target: 'http://localhost:5174',
-          rewrite: (path) => path.replace(/^\/api\/proxy/, '/api/prokerala-proxy'),
+        '/api/prokerala-proxy': {
+          target: 'http://localhost:3001',
           changeOrigin: true,
           configure: (proxy, _options) => {
             proxy.on('error', (err, _req, _res) => {
@@ -30,6 +30,14 @@ export default defineConfig(({ mode }) => {
               console.log('Proxying:', req.method, req.url);
             });
           },
+        },
+        '/api/geocode': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+        '/api/together/chat': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
         }
       }
     }
