@@ -11,12 +11,22 @@ const PORT = process.env.PORT || 3000;
 
 // Configure middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  credentials: true
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Handle CORS preflight requests
+app.options('*', cors());
+
+// Add a middleware to log requests for debugging
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
 
 // Serve static index.html for root route
 app.get('/', (req, res) => {
@@ -264,6 +274,15 @@ app.post('/api/together/chat', async (req, res) => {
 // Add a simple health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Add a CORS test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    message: 'API is working correctly',
+    cors: 'If you can see this, CORS is configured properly',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Start server
