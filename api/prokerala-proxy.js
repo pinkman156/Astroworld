@@ -67,6 +67,121 @@ function handleOptions(req, res) {
   };
 }
 
+// Together AI fallback for chart data
+async function getChartDataFallback(chartParams) {
+  try {
+    // Get API key from environment variables
+    const apiKey = process.env.VITE_TOGETHER_API_KEY || process.env.TOGETHER_API_KEY;
+    
+    if (!apiKey) {
+      console.error('Missing Together AI API key. Cannot use fallback.');
+      return {
+        success: false,
+        error: 'Together AI API key not configured for fallback'
+      };
+    }
+    
+    console.log('Using Together AI fallback for chart data with key:', apiKey.substring(0, 5) + '...');
+    
+    // Extract coordinates
+    const [latitude, longitude] = chartParams.coordinates.split(',');
+    
+    // Parse datetime
+    const datetimeParts = chartParams.datetime.replace('+05:30', '').split('T');
+    const date = datetimeParts[0];
+    const time = datetimeParts[1];
+    
+    // Create a detailed prompt for the AI
+    const prompt = [
+      {
+        "role": "system",
+        "content": "You are an expert in Vedic astrology. Your task is to provide comprehensive and accurate information about a natal chart based on the birth details provided. Include planetary positions, house placements, aspects, and astrological interpretations for the specified chart type. Format your response as structured JSON that includes positions, aspects, and interpretations."
+      },
+      {
+        "role": "user",
+        "content": `Generate detailed astrological information for a ${chartParams.chart_type.name} chart with the following birth details:
+        
+Date: ${date}
+Time: ${time}
+Latitude: ${latitude}
+Longitude: ${longitude}
+Ayanamsa: ${chartParams.ayanamsa === '1' ? 'Lahiri' : 'Chitrapaksha'}
+Chart Style: ${chartParams.chart_style}
+
+Please provide:
+1. Detailed planetary positions with degrees
+2. House placements of all planets
+3. Major aspects between planets
+4. Significant yogas or combinations
+5. Brief interpretation of the chart
+6. Any special features of this chart type
+
+Format your response as JSON with structured data that can be used to display or analyze the chart.`
+      }
+    ];
+    
+    // Call Together AI API
+    const response = await axios({
+      method: 'POST',
+      url: 'https://api.together.xyz/v1/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      data: {
+        model: "meta-llama/Llama-3-70b-chat-hf", // Use Llama 3 70B for accuracy
+        messages: prompt,
+        temperature: 0.3, // Low temperature for more factual outputs
+        max_tokens: 1500 // Generous token limit for detailed response
+      }
+    });
+    
+    // Extract the AI response
+    const aiResponse = response.data.choices[0].message.content;
+    
+    // Try to parse any JSON in the response
+    let jsonData = null;
+    try {
+      // If the response contains a JSON block, extract and parse it
+      const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/) || 
+                        aiResponse.match(/```\n([\s\S]*?)\n```/) ||
+                        aiResponse.match(/\{[\s\S]*\}/);
+                        
+      if (jsonMatch) {
+        jsonData = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+      } else {
+        // If no JSON block, try parsing the whole response
+        jsonData = JSON.parse(aiResponse);
+      }
+    } catch (parseError) {
+      console.warn('Could not parse JSON from AI response:', parseError.message);
+      // Use the raw text response if parsing fails
+      jsonData = { 
+        raw_response: aiResponse,
+        parsing_error: parseError.message
+      };
+    }
+    
+    return {
+      success: true,
+      data: {
+        chart_data: jsonData || { text: aiResponse },
+        source: "together_ai_fallback",
+        chart_type: chartParams.chart_type.name,
+        chart_style: chartParams.chart_style,
+        input_parameters: chartParams
+      }
+    };
+  } catch (error) {
+    console.error('Together AI fallback error:', error.message);
+    return {
+      success: false,
+      error: `Together AI fallback failed: ${error.message}`,
+      details: error.response?.data || error.message
+    };
+  }
+}
+
 // Get Prokerala OAuth token
 async function getProkeralaToken(req, res) {
   try {
@@ -401,22 +516,69 @@ async function prokeralaApiRequest(req, res, endpoint) {
     
     // Make request to Prokerala API
     try {
-    const response = await axios({
-      method: 'GET',
-      url: `https://api.prokerala.com/v2/astrology/${endpoint}`,
-      params,
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    return {
-      status: 200,
-      headers: corsHeaders,
-      body: response.data
-    };
+      const response = await axios({
+        method: 'GET',
+        url: `https://api.prokerala.com/v2/astrology/${endpoint}`,
+        params,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      return {
+        status: 200,
+        headers: corsHeaders,
+        body: response.data
+      };
     } catch (apiError) {
       console.error(`Error from Prokerala API (${endpoint}):`, apiError.message);
+      
+      // Check if it's the chart endpoint - if so, try the fallback
+      if (endpoint === 'chart' && query.use_fallback !== 'false') {
+        console.log('Prokerala API failed for chart endpoint. Attempting Together AI fallback...');
+        
+        // Try the fallback service
+        const fallbackResult = await getChartDataFallback(params);
+        
+        if (fallbackResult.success) {
+          console.log('Successfully retrieved chart data from Together AI fallback');
+          
+          // Return a special response that includes both the original error and the fallback data
+          return {
+            status: 200,
+            headers: corsHeaders,
+            body: {
+              status: 'fallback_success',
+              message: 'Primary API failed, using AI-generated fallback data',
+              primary_error: {
+                status: apiError.response?.status,
+                message: apiError.message,
+                details: apiError.response?.data
+              },
+              data: fallbackResult.data
+            }
+          };
+        } else {
+          console.error('Together AI fallback also failed:', fallbackResult.error);
+          
+          // If fallback also fails, include both errors in response
+          if (apiError.response) {
+            return {
+              status: apiError.response.status,
+              headers: corsHeaders,
+              body: {
+                status: 'error',
+                error: 'API error with fallback failure',
+                primary_error: {
+                  message: apiError.message,
+                  details: apiError.response.data
+                },
+                fallback_error: fallbackResult.error
+              }
+            };
+          }
+        }
+      }
       
       // Forward the error response from Prokerala
       if (apiError.response) {
@@ -512,6 +674,14 @@ export default async function handler(req, res) {
         nodejs: process.version,
         vercel: process.env.VERCEL_ENV || 'not-vercel',
         region: process.env.VERCEL_REGION || 'unknown'
+      },
+      features: {
+        fallback: {
+          enabled: true,
+          description: "Fallback to Together AI for chart data when Prokerala API fails",
+          endpoint: "/api/prokerala-proxy/chart",
+          toggle_param: "use_fallback=false to disable"
+        }
       }
     });
   }
@@ -647,6 +817,12 @@ export default async function handler(req, res) {
           chart_style: query.chart_style
         },
         finalParamsForProkerala: finalParams,
+        fallback: {
+          enabled: path === 'chart' && query.use_fallback !== 'false',
+          will_trigger: path === 'chart' && query.use_fallback !== 'false' && 'Only if primary API fails',
+          provider: 'Together AI',
+          disable_with: 'use_fallback=false'
+        },
         info: "This is a debug endpoint that shows how parameters are processed without calling the actual API"
       });
     } catch (error) {
