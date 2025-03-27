@@ -24,12 +24,12 @@
     "api/proxy.js": {
       "memory": 1024,
       "maxDuration": 60,
-      "runtime": "nodejs18.x"
+      "runtime": "@vercel/node@3.0.5"
     },
     "api/*.js": {
       "memory": 1024,
       "maxDuration": 60,
-      "runtime": "nodejs18.x"
+      "runtime": "@vercel/node@3.0.5"
     }
   },
   "headers": [
@@ -50,4 +50,4 @@
       ]
     }
   ]
-} 
+}
