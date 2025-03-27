@@ -4,7 +4,7 @@ import { BirthData, ApiResponse, VedicChart } from '../../types';
 // API Configuration based on environment
 const API_CONFIG = {
   development: {
-    baseURL: 'http://localhost:5176',
+    baseURL: '',  // Empty base URL - always use relative URLs
     timeout: 30000,
   },
   production: {
@@ -29,11 +29,10 @@ class ApiService {
     // Determine environment
     const environment = import.meta.env.MODE || 'development';
     
-    // In development, use the configured baseURL
-    // In production, use a relative URL to avoid CORS issues
+    // Always use relative URLs to avoid CORS issues
     const config = environment === 'production' ? API_CONFIG.production : API_CONFIG.development;
     
-    console.log(`API Service initialized in ${environment} mode with baseURL: ${config.baseURL || 'relative URLs'}`);
+    console.log(`API Service initialized in ${environment} mode with relative URLs`);
 
     // Create API client
     this.client = axios.create({

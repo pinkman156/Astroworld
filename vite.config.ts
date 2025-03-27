@@ -16,22 +16,25 @@ export default defineConfig(({ mode }) => {
       'process.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL || '')
     },
     server: {
-      // Configure proxy for development server
+      // Configure proxy for development server - using direct connections instead of local proxy
       proxy: {
-        // Proxy API requests to our serverless API handler
-        '/api/prokerala-proxy': {
-          target: 'http://localhost:3001',
+        '/api/geocode': {
+          target: 'https://nominatim.openstreetmap.org',
           changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/geocode/, '/search'),
           configure: (proxy, _options) => {
             proxy.on('error', (err, _req, _res) => {
-              console.log('proxy error', err);
+              console.log('Geocoding proxy error:', err);
             });
-            proxy.on('proxyReq', (_proxyReq, req, _res) => {
-              console.log('Proxying:', req.method, req.url);
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              // Set required headers for Nominatim
+              proxyReq.setHeader('User-Agent', 'AstroInsights/1.0');
+              proxyReq.setHeader('Referer', 'https://astroworld-delta.vercel.app/');
+              console.log('Proxying geocode:', req.method, req.url);
             });
           },
         },
-        '/api/geocode': {
+        '/api/prokerala-proxy': {
           target: 'http://localhost:3001',
           changeOrigin: true,
         },
