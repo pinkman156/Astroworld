@@ -2,14 +2,14 @@
   "version": 2,
   "public": true,
   "rewrites": [
-    { "source": "/api/prokerala-token", "destination": "/api/prokerala-token.js" },
-    { "source": "/api/auth/prokerala", "destination": "/api/auth/prokerala.js" },
-    { "source": "/api/prokerala-planet-position", "destination": "/api/prokerala-planet-position.js" },
-    { "source": "/api/prokerala-kundli", "destination": "/api/prokerala-kundli.js" },
-    { "source": "/api/prokerala-chart", "destination": "/api/prokerala-chart.js" },
-    { "source": "/api/geocode", "destination": "/api/geocode.js" },
-    { "source": "/api/env-test", "destination": "/api/env-test.js" },
-    { "source": "/api/prokerala-test", "destination": "/api/prokerala-test.js" },
+    { "source": "/api/prokerala-token", "destination": "/api/prokerala-api.js" },
+    { "source": "/api/auth/prokerala", "destination": "/api/prokerala-api.js" },
+    { "source": "/api/prokerala-planet-position", "destination": "/api/prokerala-api.js" },
+    { "source": "/api/prokerala-kundli", "destination": "/api/prokerala-api.js" },
+    { "source": "/api/prokerala-chart", "destination": "/api/prokerala-api.js" },
+    { "source": "/api/prokerala-test", "destination": "/api/prokerala-api.js" },
+    { "source": "/api/env-test", "destination": "/api/prokerala-api.js" },
+    { "source": "/api/geocode", "destination": "/api/api-handler.js" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "env": {
@@ -28,7 +28,11 @@
   },
   "builds": [
     {
-      "src": "api/**/*.js",
+      "src": "api/prokerala-api.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/api-handler.js",
       "use": "@vercel/node"
     },
     {
