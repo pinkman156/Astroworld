@@ -11,11 +11,48 @@ const API_CONFIG = {
     // Use relative URL in production to avoid CORS issues
     baseURL: '',
     timeout: 30000,
+    fallbackURL: 'https://astroworld-delta.vercel.app' // Production deployment URL
   },
 };
 
 // Cache for API responses
 const cache = new Map<string, any>();
+
+/**
+ * Converts 12-hour time format (HH:MM AM/PM) to 24-hour format (HH:MM)
+ * @param time12h - Time in 12-hour format
+ * @returns Time in 24-hour format
+ */
+function convertTo24HourFormat(time12h: string): string {
+  // If the time is already in 24-hour format (no AM/PM), return it
+  if (!time12h.includes('AM') && !time12h.includes('PM') && !time12h.includes('am') && !time12h.includes('pm')) {
+    return time12h;
+  }
+  
+  // Parse the 12-hour time
+  const timeRegex = /(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)/i;
+  const match = time12h.match(timeRegex);
+  
+  if (!match) {
+    // If the format doesn't match, return as is
+    console.warn('Invalid time format:', time12h);
+    return time12h;
+  }
+  
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2];
+  const period = match[3].toUpperCase();
+  
+  // Convert hours to 24-hour format
+  if (period === 'PM' && hours < 12) {
+    hours += 12;
+  } else if (period === 'AM' && hours === 12) {
+    hours = 0;
+  }
+  
+  // Format with leading zeros
+  return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}
 
 /**
  * API Service class for handling all API requests
@@ -48,6 +85,25 @@ class ApiService {
       (response) => response,
       (error: AxiosError) => this.handleApiError(error)
     );
+    
+    // Add request interceptor to try fallback URL for 404 errors in production
+    if (environment === 'production') {
+      this.client.interceptors.response.use(
+        (response) => response,
+        async (error: AxiosError) => {
+          const originalRequest = error.config;
+          if (error.response?.status === 404 && originalRequest && !originalRequest.headers['X-Retry-With-Fallback']) {
+            console.log('API endpoint not found, trying fallback URL:', API_CONFIG.production.fallbackURL);
+            // Set flag to prevent infinite loop
+            originalRequest.headers['X-Retry-With-Fallback'] = 'true';
+            // Retry with fallback URL
+            originalRequest.url = `${API_CONFIG.production.fallbackURL}${originalRequest.url}`;
+            return this.client(originalRequest);
+          }
+          return Promise.reject(error);
+        }
+      );
+    }
   }
 
   /**
@@ -95,13 +151,88 @@ class ApiService {
     }
 
     try {
-      const response = await this.client.post('/api/prokerala-proxy/token', {});
+      console.log('Requesting new Prokerala API token...');
+      
+      // Try different API endpoints if needed
+      let response;
+      try {
+        response = await this.client.post('/api/prokerala-proxy/token', {});
+      } catch (err: any) {
+        console.warn('Error with primary token endpoint:', err.message);
+        
+        // If we're in production, try a direct URL as a fallback
+        if (import.meta.env.MODE === 'production') {
+          console.log('Trying alternative token endpoint...');
+          
+          // Try the backup URL if the primary one fails
+          try {
+            response = await axios.post('https://astroworld-delta.vercel.app/api/prokerala-proxy/token', {}, {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              timeout: 15000
+            });
+          } catch (fallbackErr: any) {
+            console.error('Fallback token endpoint also failed:', fallbackErr.message);
+            throw new Error('All API token endpoints failed');
+          }
+        } else {
+          throw err; // In development, just propagate the original error
+        }
+      }
+      
+      if (!response?.data?.access_token) {
+        console.error('Invalid token response:', response?.data);
+        throw new Error('Invalid token response from API');
+      }
+      
       this.prokeralaToken = response.data.access_token;
       // Set expiry time with a 10-minute buffer
       this.tokenExpiry = now + (response.data.expires_in - 600) * 1000;
-      return this.prokeralaToken as string;
+      console.log('Successfully retrieved Prokerala API token');
+      
+      // Ensure null token is never returned
+      if (!this.prokeralaToken) {
+        throw new Error('Failed to get a valid token');
+      }
+      
+      return this.prokeralaToken;
     } catch (error) {
       console.error('Failed to get Prokerala token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper to make authenticated Prokerala API requests with retries
+   */
+  private async makeProkeralaRequest(endpoint: string, params: Record<string, any>, retryCount = 0): Promise<any> {
+    const maxRetries = 1; // Only retry once
+    
+    try {
+      // Get a fresh token
+      const token = await this.getProkeralaToken();
+      
+      // Make the API request
+      const response = await this.client.get(`/api/prokerala-proxy/${endpoint}`, {
+        params,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      return response;
+    } catch (error: any) {
+      // If it's an authentication error and we haven't exceeded retries
+      if (error?.response?.status === 401 && retryCount < maxRetries) {
+        console.log('Authentication error, refreshing token and retrying...');
+        // Reset token and retry
+        this.prokeralaToken = null;
+        this.tokenExpiry = null;
+        return this.makeProkeralaRequest(endpoint, params, retryCount + 1);
+      }
+      
+      // Otherwise propagate the error
       throw error;
     }
   }
@@ -112,15 +243,17 @@ class ApiService {
   async getAstrologyInsight(birthData: BirthData): Promise<ApiResponse> {
     const cacheKey = `insight_${JSON.stringify(birthData)}`;
     
-    // Check cache first
-    if (cache.has(cacheKey)) {
-      return cache.get(cacheKey);
+    // Check if insight is cached
+    const cachedResponse = cache.get(cacheKey);
+    if (cachedResponse) {
+      console.log('Returning cached insight');
+      return cachedResponse;
     }
     
     try {
       // Get geocoding data for the place
       console.log(`Attempting to geocode: ${birthData.place}`);
-      let location;
+      
       let coordinates;
       
       try {
@@ -130,13 +263,10 @@ class ApiService {
         
         if (!geocodeResponse.data || geocodeResponse.data.length === 0) {
           console.warn(`Location not found: ${birthData.place}`);
-          return {
-            success: false,
-            error: 'Location not found. Please enter a valid city or place.'
-          };
+          throw new Error('Location not found');
         }
         
-        location = geocodeResponse.data[0];
+        const location = geocodeResponse.data[0];
         coordinates = `${location.lat},${location.lon}`;
         console.log(`Geocoded ${birthData.place} to coordinates ${coordinates}`);
       } catch (geocodeError: any) {
@@ -148,22 +278,30 @@ class ApiService {
       }
       
       // Format date and time for API request
-      const [year, month, day] = birthData.date.split('-');
-      const formattedDateTime = `${year}-${month}-${day} ${birthData.time}:00`;
+      let formattedDateTime;
+      if (birthData.date.includes('/')) {
+        // Convert from DD/MM/YYYY to YYYY-MM-DD format
+        const [day, month, year] = birthData.date.split('/');
+        
+        // Convert time from 12-hour to 24-hour format if needed
+        let formattedTime = convertTo24HourFormat(birthData.time);
+        
+        formattedDateTime = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${formattedTime}:00`;
+      } else {
+        // Already in YYYY-MM-DD format
+        const [year, month, day] = birthData.date.split('-');
+        
+        // Convert time from 12-hour to 24-hour format if needed
+        let formattedTime = convertTo24HourFormat(birthData.time);
+        
+        formattedDateTime = `${year}-${month}-${day} ${formattedTime}:00`;
+      }
       
-      // Get astrological data from Together AI
-      const token = await this.getProkeralaToken();
-      
-      // Get the birth chart data
-      const chartResponse = await this.client.get('/api/prokerala-proxy/chart', {
-        params: {
-          datetime: formattedDateTime,
-          coordinates,
-          ayanamsa: 1 // Lahiri ayanamsa
-        },
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      // Get the birth chart data using our helper method
+      const chartResponse = await this.makeProkeralaRequest('chart', {
+        datetime: formattedDateTime,
+        coordinates,
+        ayanamsa: 1 // Lahiri ayanamsa
       });
       
       // Create the insight using Together AI
@@ -241,8 +379,24 @@ class ApiService {
       const coordinates = `${location.lat},${location.lon}`;
       
       // Format date and time for API request
-      const [year, month, day] = birthData.date.split('-');
-      const formattedDateTime = `${year}-${month}-${day} ${birthData.time}:00`;
+      let formattedDateTime;
+      if (birthData.date.includes('/')) {
+        // Convert from DD/MM/YYYY to YYYY-MM-DD format
+        const [day, month, year] = birthData.date.split('/');
+        
+        // Convert time from 12-hour to 24-hour format if needed
+        let formattedTime = convertTo24HourFormat(birthData.time);
+        
+        formattedDateTime = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${formattedTime}:00`;
+      } else {
+        // Already in YYYY-MM-DD format
+        const [year, month, day] = birthData.date.split('-');
+        
+        // Convert time from 12-hour to 24-hour format if needed
+        let formattedTime = convertTo24HourFormat(birthData.time);
+        
+        formattedDateTime = `${year}-${month}-${day} ${formattedTime}:00`;
+      }
       
       // Get Prokerala token
       const token = await this.getProkeralaToken();
@@ -250,39 +404,24 @@ class ApiService {
       // Preload various astrological data in parallel
       await Promise.all([
         // Get planet positions
-        this.client.get('/api/prokerala-proxy/planet-position', {
-          params: {
-            datetime: formattedDateTime,
-            coordinates: coordinates,
-            ayanamsa: 1
-          },
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        this.makeProkeralaRequest('planet-position', {
+          datetime: formattedDateTime,
+          coordinates: coordinates,
+          ayanamsa: 1
         }),
         
         // Get birth chart
-        this.client.get('/api/prokerala-proxy/chart', {
-          params: {
-            datetime: formattedDateTime,
-            coordinates: coordinates,
-            ayanamsa: 1
-          },
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        this.makeProkeralaRequest('chart', {
+          datetime: formattedDateTime,
+          coordinates: coordinates,
+          ayanamsa: 1
         }),
         
         // Get kundli
-        this.client.get('/api/prokerala-proxy/kundli', {
-          params: {
-            datetime: formattedDateTime,
-            coordinates: coordinates,
-            ayanamsa: 1
-          },
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        this.makeProkeralaRequest('kundli', {
+          datetime: formattedDateTime,
+          coordinates: coordinates,
+          ayanamsa: 1
         })
       ]);
       
@@ -291,6 +430,77 @@ class ApiService {
       console.error('Error preloading birth chart data:', error);
       throw error;
     }
+  }
+
+  /**
+   * Check the health of API endpoints
+   * This can be called when the app initializes to verify if all API endpoints are working
+   */
+  async checkApiHealth(): Promise<{
+    geocode: boolean;
+    prokerala: boolean;
+    ai: boolean;
+    errors: string[];
+  }> {
+    const result = {
+      geocode: false,
+      prokerala: false,
+      ai: false,
+      errors: [] as string[]
+    };
+    
+    // Check geocode API
+    try {
+      const response = await this.client.get('/api/geocode', {
+        params: { q: 'New York' }
+      });
+      result.geocode = response.status === 200 && response.data && response.data.length > 0;
+      if (!result.geocode) {
+        result.errors.push('Geocode API response is invalid');
+      }
+    } catch (error: any) {
+      result.errors.push(`Geocode API error: ${error.message}`);
+    }
+    
+    // Check Prokerala token API
+    try {
+      await this.getProkeralaToken();
+      result.prokerala = true;
+    } catch (error: any) {
+      result.errors.push(`Prokerala API error: ${error.message}`);
+    }
+    
+    // Check AI API
+    try {
+      const response = await this.client.post('/api/together/chat', {
+        model: "mistralai/Mixtral-8x7B-Instruct-v0.1", 
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: "Hello" }
+        ],
+        temperature: 0.7,
+        max_tokens: 50
+      });
+      result.ai = response.status === 200 && response.data?.choices?.[0]?.message?.content;
+      if (!result.ai) {
+        result.errors.push('AI API response is invalid');
+      }
+    } catch (error: any) {
+      result.errors.push(`AI API error: ${error.message}`);
+    }
+    
+    // Log health check results
+    console.log('API Health Check:', result);
+    
+    return result;
+  }
+  
+  /**
+   * Get current deployment domain
+   * This helps debugging API issues
+   */
+  getCurrentDeploymentDomain(): string {
+    return window.location.origin;
   }
 }
 

@@ -20,7 +20,8 @@
     { "source": "/(.*)", "destination": "/$1" }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://astroworld-delta.vercel.app"
+    "VITE_API_BASE_URL": "https://astroworld-delta.vercel.app",
+    "VITE_BACKUP_API_URL": "https://astroworld-backup.vercel.app"
   },
   "github": {
     "silent": true
@@ -32,7 +33,7 @@
         { "key": "Access-Control-Allow-Credentials", "value": "true" },
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
-        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, X-Retry-With-Fallback" }
       ]
     }
   ]

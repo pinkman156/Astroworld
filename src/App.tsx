@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import './App.css'
 import BirthDataForm from './components/BirthDataForm'
@@ -16,6 +16,53 @@ function App() {
   });
 
   const [lastSubmittedData, setLastSubmittedData] = useState<BirthData | null>(null);
+  
+  // API health state
+  const [apiHealth, setApiHealth] = useState<{
+    checked: boolean;
+    healthy: boolean;
+    message: string;
+  }>({
+    checked: false,
+    healthy: true,
+    message: ''
+  });
+
+  // Check API health on component mount
+  useEffect(() => {
+    async function checkApiHealth() {
+      try {
+        console.log('Checking API health...');
+        console.log('Current deployment domain:', api.getCurrentDeploymentDomain());
+        
+        const health = await api.checkApiHealth();
+        const allHealthy = health.geocode && health.prokerala && health.ai;
+        
+        setApiHealth({
+          checked: true,
+          healthy: allHealthy,
+          message: allHealthy 
+            ? 'All API services are working correctly'
+            : `API issues detected: ${health.errors.join(', ')}`
+        });
+        
+        if (!allHealthy) {
+          console.error('API Health Check Failed:', health);
+        } else {
+          console.log('API Health Check Passed');
+        }
+      } catch (error: any) {
+        console.error('Error checking API health:', error);
+        setApiHealth({
+          checked: true,
+          healthy: false,
+          message: `Error checking API health: ${error.message}`
+        });
+      }
+    }
+    
+    checkApiHealth();
+  }, []);
 
   const handleBirthDataSubmit = async (birthData: BirthData) => {
     // Check if this is a different birth data than before
@@ -122,6 +169,24 @@ function App() {
             Discover the cosmic forces that shape your journey through life. Enter your birth details below to receive a personalized astrological analysis.
           </p>
         </motion.header>
+
+        {/* API Health Warning */}
+        {apiHealth.checked && !apiHealth.healthy && (
+          <motion.div 
+            className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            transition={{ duration: 0.3 }}
+          >
+            <p className="text-sm font-medium">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2 -mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              API Connection Issue: {apiHealth.message}
+            </p>
+            <p className="text-xs mt-1 opacity-80">Some features may not work correctly. Please try again later.</p>
+          </motion.div>
+        )}
 
         {/* Environment Variables Tester */}
         <EnvTester />
