@@ -8,16 +8,6 @@ const TOGETHER_API_URL = 'https://api.together.xyz/v1/chat/completions';
 // Get API key from environment variables using Vite's format
 const API_KEY = import.meta.env.VITE_TOGETHER_API_KEY;
 
-// CORS Proxy URL that works in both development and production
-const getProxyUrl = () => {
-  // Check if we're in development or production
-  const isDevelopment = import.meta.env.DEV;
-  // Use localhost for development, Vercel serverless function for production
-  return isDevelopment 
-    ? 'http://localhost:8080/' 
-    : '/api/proxy?url=';
-};
-
 // Cache for API responses to minimize redundant calls
 const apiCache = {
   birthChartData: null as any,
@@ -232,27 +222,13 @@ You must follow this format exactly, keeping descriptions concise and direct. Ma
     console.log('Sending request to Together AI API...');
     
     try {
-      // Get appropriate proxy URL based on environment
-      const proxyUrl = getProxyUrl();
-      
       // Make request using the Together AI API format
       const response = await axios({
         method: 'POST',
-        url: `${proxyUrl}${TOGETHER_API_URL}`,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
-        },
+        url: '/api/ai/generate',
         data: {
-          model: "meta-llama/Llama-3-70b-chat-hf",  // Using Llama 3 70B model
-          messages: [
-            {
-              role: "user",
-              content: prompt
-            }
-          ],
-          max_tokens: 1500,
-          temperature: 0.7
+          prompt: prompt,
+          birthData: birthData
         }
       });
 
@@ -497,28 +473,11 @@ FORMAT YOUR RESPONSE AS VALID JSON with this structure:
 
 Provide accurate information based on Vedic astrology principles.`;
 
-    // Use the CORS proxy to avoid CORS issues
-    const proxyUrl = getProxyUrl();
-    
     // Make request using the Together AI API format
     const response = await axios({
       method: 'POST',
-      url: `${proxyUrl}${TOGETHER_API_URL}`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
-      data: {
-        model: "meta-llama/Llama-3-70b-chat-hf",
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        max_tokens: 4000, // Increased token limit for comprehensive response
-        temperature: 0.2
-      }
+      url: '/api/chart/vedic',
+      data: birthData
     });
 
     console.log('Consolidated Vedic chart response received');
@@ -605,28 +564,11 @@ FORMAT YOUR RESPONSE AS VALID JSON with this structure:
 
 Provide accurate information based on Vedic astrology principles. Include all planets (Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Rahu, Ketu).`;
 
-    // Use the CORS proxy to avoid CORS issues
-    const proxyUrl = getProxyUrl();
-    
     // Make request using the Together AI API format
     const response = await axios({
       method: 'POST',
-      url: `${proxyUrl}${TOGETHER_API_URL}`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
-      data: {
-        model: "meta-llama/Llama-3-70b-chat-hf",
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        max_tokens: 1500,
-        temperature: 0.2
-      }
+      url: '/api/chart/birth',
+      data: { birthData, birthChartData }
     });
 
     console.log('Birth chart response received');
@@ -707,28 +649,11 @@ FORMAT YOUR RESPONSE AS VALID JSON with this structure:
 
 Calculate the dashas according to Vedic astrological principles based on the Moon's nakshatra position.`;
 
-    // Use the CORS proxy to avoid CORS issues
-    const proxyUrl = getProxyUrl();
-    
     // Make request using the Together AI API format
     const response = await axios({
       method: 'POST',
-      url: `${proxyUrl}${TOGETHER_API_URL}`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
-      data: {
-        model: "meta-llama/Llama-3-70b-chat-hf",
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        max_tokens: 1200,
-        temperature: 0.2
-      }
+      url: '/api/chart/dashas',
+      data: { birthData, birthChartData }
     });
 
     console.log('Dasha periods response received');
@@ -816,28 +741,11 @@ FORMAT YOUR RESPONSE AS VALID JSON with this structure:
 
 Identify at least 3-5 yogas and 2-3 doshas based on the planetary positions and aspects in the chart.`;
 
-    // Use the CORS proxy to avoid CORS issues
-    const proxyUrl = getProxyUrl();
-    
     // Make request using the Together AI API format
     const response = await axios({
       method: 'POST',
-      url: `${proxyUrl}${TOGETHER_API_URL}`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
-      data: {
-        model: "meta-llama/Llama-3-70b-chat-hf",
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        max_tokens: 1200,
-        temperature: 0.2
-      }
+      url: '/api/chart/yogas-doshas',
+      data: { birthData, birthChartData }
     });
 
     console.log('Yogas and doshas response received');
