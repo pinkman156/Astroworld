@@ -2,6 +2,15 @@ import axios from 'axios';
 
 // Consolidated API handler for all Prokerala endpoints
 export default async function handler(req, res) {
+  // Handle OPTIONS requests for CORS preflight
+  if (req.method === 'OPTIONS') {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(200).end();
+  }
+
   // Extract the specific endpoint from the path
   const path = req.url.split('?')[0];
   const endpoint = path.replace(/^\/api\//, '');
@@ -29,16 +38,9 @@ export default async function handler(req, res) {
     parsedBodyKeys: req.body ? Object.keys(req.body) : []
   });
   
-  // Get credentials (try multiple formats)
-  const clientId = 
-    process.env.VITE_PROKERALA_CLIENT_ID || 
-    process.env.PROKERALA_CLIENT_ID || 
-    process.env.NEXT_PUBLIC_PROKERALA_CLIENT_ID;
-  
-  const clientSecret = 
-    process.env.VITE_PROKERALA_CLIENT_SECRET || 
-    process.env.PROKERALA_CLIENT_SECRET || 
-    process.env.NEXT_PUBLIC_PROKERALA_CLIENT_SECRET;
+  // Get client credentials from environment variables
+  const clientId = process.env.VITE_PROKERALA_CLIENT_ID;
+  const clientSecret = process.env.VITE_PROKERALA_CLIENT_SECRET;
   
   // Route to appropriate handler based on endpoint
   try {

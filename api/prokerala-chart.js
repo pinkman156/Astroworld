@@ -1,6 +1,15 @@
 import axios from 'axios';
 
 export default async function handler(req, res) {
+  // Handle OPTIONS requests for CORS preflight
+  if (req.method === 'OPTIONS') {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(200).end();
+  }
+
   try {
     const { datetime, coordinates, ayanamsa } = req.query;
     const token = req.headers.authorization?.split(' ')[1];

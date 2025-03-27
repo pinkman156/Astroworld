@@ -150,26 +150,21 @@ const normalizeTimeFormat = (timeStr: string): string => {
  */
 export const getCoordinates = async (place: string): Promise<string> => {
   try {
-    // Call OpenStreetMap API directly
+    // Call our backend geocoding endpoint
     const response = await axios({
       method: 'GET',
-      url: `https://nominatim.openstreetmap.org/search`,
+      url: '/api/geocode',
       params: {
-        q: place,
-        format: 'json'
-      },
-      headers: {
-        'User-Agent': 'AstroInsights/1.0',
-        'Accept': 'application/json',
-        'Accept-Language': 'en'
+        q: place
       }
     });
     
-    if (response.data && response.data.length > 0) {
-      // Get the first result
-      const location = response.data[0];
-      
+    if (response.data && response.data.lat && response.data.lon) {
       // Format as required by Prokerala API v2: "lat,lng"
+      return `${response.data.lat},${response.data.lon}`;
+    } else if (response.data && response.data.data && response.data.data.length > 0) {
+      // Format from another possible response format
+      const location = response.data.data[0];
       return `${location.lat},${location.lon}`;
     }
     
@@ -472,7 +467,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Make request to get planet positions via CORS proxy
         const planetResponse = await axios({
           method: 'GET',
-          url: `${PROKERALA_API_URL}/planet-position`,
+          url: '/api/prokerala-planet-position',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -490,7 +485,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Also get kundli data via CORS proxy
         const kundliResponse = await axios({
           method: 'GET',
-          url: `${PROKERALA_API_URL}/kundli`,
+          url: '/api/prokerala-kundli',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -509,7 +504,7 @@ export const getBirthChart = async (birthData: BirthData): Promise<BirthChartDat
         // Get advanced chart data
         const chartResponse = await axios({
           method: 'GET',
-          url: `${PROKERALA_API_URL}/chart`,
+          url: '/api/prokerala-chart',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'

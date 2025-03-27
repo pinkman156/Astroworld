@@ -2,6 +2,15 @@ import axios from 'axios';
 
 // Consolidated API handler for geocoding and other non-Prokerala APIs
 export default async function handler(req, res) {
+  // Handle OPTIONS requests for CORS preflight
+  if (req.method === 'OPTIONS') {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(200).end();
+  }
+
   // Extract the specific endpoint from the path
   const path = req.url.split('?')[0];
   const endpoint = path.replace(/^\/api\//, '');

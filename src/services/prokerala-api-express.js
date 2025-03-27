@@ -70,18 +70,12 @@ export const getCoordinates = async (placeName) => {
   try {
     logger.debug('Geocoding place:', placeName);
     
-    // Instead of going through our API server, call OpenStreetMap API directly
+    // Use our backend API endpoint instead of calling OpenStreetMap directly
     const response = await axios({
       method: 'GET',
-      url: `https://nominatim.openstreetmap.org/search`,
+      url: getFullApiUrl(API_ENDPOINTS.GEOCODE),
       params: {
-        q: placeName,
-        format: 'json'
-      },
-      headers: {
-        'User-Agent': 'AstroInsights/1.0',
-        'Accept': 'application/json',
-        'Accept-Language': 'en'
+        q: placeName
       }
     });
     
