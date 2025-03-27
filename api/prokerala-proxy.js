@@ -211,9 +211,8 @@ async function prokeralaApiRequest(req, res, endpoint) {
           decodedDatetime = decodedDatetime.replace(' ', 'T');
         }
         
-        // VERY IMPORTANT: Standardize the datetime without timezone for chart endpoint
-        // This prevents the "double time specification" error
-        // Strip any existing timezone information - the API adds IST by default
+        // VERY IMPORTANT: Standardize the datetime format for chart endpoint
+        // First, strip any existing timezone information
         decodedDatetime = decodedDatetime.replace(/([T\s]\d{2}:\d{2}(:\d{2})?)([+-]\d{2}:\d{2})?.*$/, '$1');
         
         // Make sure datetime is in correct format YYYY-MM-DDTHH:MM:SS
@@ -233,6 +232,10 @@ async function prokeralaApiRequest(req, res, endpoint) {
         if (!decodedDatetime.match(/:\d{2}$/)) {
           decodedDatetime += ':00';
         }
+        
+        // CRITICAL FIX: Add timezone information required by Prokerala API
+        // Add +05:30 for India Standard Time as required by Prokerala
+        decodedDatetime += '+05:30';
       } else {
         // For other endpoints, use the standard format with space
         if (decodedDatetime.includes('T')) {
@@ -292,20 +295,24 @@ async function prokeralaApiRequest(req, res, endpoint) {
         if (typeof query.chart_type === 'object') {
           chartType = JSON.stringify(query.chart_type);
         } else {
-          // If it's a string, ensure it's valid JSON
-          const parsedType = JSON.parse(query.chart_type);
-          if (!parsedType.name) {
-            return {
-              status: 400,
-              headers: corsHeaders,
-              body: { 
-                error: 'Invalid chart_type format',
-                message: 'chart_type must be a JSON object with "name" property'
-              }
-            };
+          // Try to parse if it's a string
+          try {
+            const parsedType = JSON.parse(query.chart_type);
+            if (!parsedType.name) {
+              throw new Error('Missing name property');
+            }
+            // Re-stringify to ensure proper format
+            chartType = JSON.stringify({ name: parsedType.name });
+          } catch (parseError) {
+            // Handle the case where it might be a single string like "Rasi"
+            if (typeof query.chart_type === 'string' && query.chart_type.match(/^[A-Za-z]+$/)) {
+              // If it's just a name string (e.g. "Rasi"), convert to proper format
+              chartType = JSON.stringify({ name: query.chart_type });
+            } else {
+              // If parsing fails and it's not a simple string, give clear error
+              throw parseError;
+            }
           }
-          // Re-stringify to ensure proper format
-          chartType = JSON.stringify({ name: parsedType.name });
         }
       } catch (e) {
         // If parsing fails, give clear error
@@ -344,6 +351,13 @@ async function prokeralaApiRequest(req, res, endpoint) {
     if (endpoint === 'chart') {
       params.chart_type = chartType;
       params.chart_style = query.chart_style;
+
+      // Log exactly what's being sent to the API
+      console.log('Final parameters being sent to Prokerala API:', {
+        url: `https://api.prokerala.com/v2/astrology/${endpoint}`,
+        params: JSON.stringify(params),
+        decodedParams: params
+      });
     }
     
     console.log(`Making ${endpoint} request to Prokerala API with params:`, params);
@@ -480,9 +494,18 @@ export default async function handler(req, res) {
           if (typeof query.chart_type === 'object') {
             processedChartType = JSON.stringify(query.chart_type);
           } else {
-            // If it's a string, ensure it's valid JSON
-            const parsed = JSON.parse(query.chart_type);
-            processedChartType = JSON.stringify(parsed);
+            // Try to parse if it's a string
+            try {
+              const parsed = JSON.parse(query.chart_type);
+              processedChartType = JSON.stringify(parsed);
+            } catch (parseError) {
+              // Handle the case where it might be a single string like "Rasi"
+              if (typeof query.chart_type === 'string' && query.chart_type.match(/^[A-Za-z]+$/)) {
+                processedChartType = JSON.stringify({ name: query.chart_type });
+              } else {
+                processedChartType = `Error parsing: ${parseError.message}`;
+              }
+            }
           }
         } catch (e) {
           processedChartType = `Error parsing: ${e.message}`;
@@ -508,16 +531,32 @@ export default async function handler(req, res) {
           // Strip timezone info
           const withoutTZ = iso.replace(/([T\s]\d{2}:\d{2}(:\d{2})?)([+-]\d{2}:\d{2})?.*$/, '$1');
           
+          // Add timezone (+05:30 for IST) for chart endpoint
+          const withTZ = path === 'chart' ? withoutTZ + '+05:30' : withoutTZ;
+          
           processedDatetime = {
             original: query.datetime,
             decoded: decodedDatetime,
             withoutPlus, 
             iso,
-            withoutTZ
+            withoutTZ,
+            final: withTZ
           };
         } catch (e) {
           processedDatetime = `Error processing: ${e.message}`;
         }
+      }
+      
+      // Construct final parameters as they would be sent to Prokerala
+      const finalParams = {
+        datetime: processedDatetime?.final || query.datetime,
+        coordinates: query.coordinates,
+        ayanamsa: query.ayanamsa || '1'
+      };
+      
+      if (path === 'chart') {
+        finalParams.chart_type = processedChartType;
+        finalParams.chart_style = query.chart_style;
       }
       
       return res.status(200).json({
@@ -537,6 +576,7 @@ export default async function handler(req, res) {
           ayanamsa: query.ayanamsa,
           chart_style: query.chart_style
         },
+        finalParamsForProkerala: finalParams,
         info: "This is a debug endpoint that shows how parameters are processed without calling the actual API"
       });
     } catch (error) {
