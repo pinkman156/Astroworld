@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       const coordinates = await getCoordinates(place);
       
       // Get OAuth token
-      const token = await getProkeralaToken(clientId, clientSecret);
+      const token = await getProkeralaToken();
       
       // Normalize date and time
       const normalizedDate = normalizeDateFormat(date);
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
         // Get planet positions
         axios({
           method: 'GET',
-          url: 'https://api.prokerala.com/v2/astrology/planet-position',
+          url: '/api/proxy/planet-position',
           headers: { 'Authorization': `Bearer ${token}` },
           params: {
             datetime: formattedDateTime,
@@ -87,7 +87,7 @@ export default async function handler(req, res) {
         // Get Kundli data
         axios({
           method: 'GET',
-          url: 'https://api.prokerala.com/v2/astrology/kundli',
+          url: '/api/proxy/kundli',
           headers: { 'Authorization': `Bearer ${token}` },
           params: {
             datetime: formattedDateTime,
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
         // Get chart data
         axios({
           method: 'GET',
-          url: 'https://api.prokerala.com/v2/astrology/chart',
+          url: '/api/proxy/chart',
           headers: { 'Authorization': `Bearer ${token}` },
           params: {
             datetime: formattedDateTime,
@@ -179,19 +179,11 @@ async function getCoordinates(place) {
 /**
  * Gets an OAuth token for Prokerala API
  */
-async function getProkeralaToken(clientId, clientSecret) {
+async function getProkeralaToken() {
   try {
     const response = await axios({
       method: 'POST',
-      url: 'https://api.prokerala.com/token',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      data: new URLSearchParams({
-        'grant_type': 'client_credentials',
-        'client_id': clientId,
-        'client_secret': clientSecret
-      })
+      url: '/api/proxy/token'
     });
     
     if (response.data && response.data.access_token) {
