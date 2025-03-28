@@ -190,7 +190,7 @@ export default async function handler(req, res) {
             const [_, name, date, time, place] = detailsMatch;
             
             // Create a more direct prompt focused on listing career options
-            modifiedPrompt = `Based on the natal chart for ${name} (DOB: ${date}, Time: ${time}, Location: ${place}), please list exactly 5 suitable career fields and 3 professional strengths. Format as bullet points.`;
+            modifiedPrompt = `Based on the natal chart for ${name} (DOB: ${date}, Time: ${time}, Location: ${place}), provide career insights in paragraph format. Write 2-3 concise paragraphs about suitable career fields and professional strengths. Avoid using bullet points or numbered lists.`;
             
             // Extract chart data if available
             const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
@@ -199,8 +199,8 @@ export default async function handler(req, res) {
             }
           } else {
             // Fallback to a simpler transformation
-            modifiedPrompt = userMessage.replace(/Generate a career reading/i, 'List exactly 5 suitable career options as bullet points. Keep it simple and direct.')
-                                    .replace(/Focus ONLY on.+?\./, 'Focus only on listing career options.');
+            modifiedPrompt = userMessage.replace(/Generate a career reading/i, 'Write a brief career analysis in paragraph format. Avoid bullet points or lists.')
+                                    .replace(/Focus ONLY on.+?\./, 'Focus on describing career paths and strengths in flowing text.');
           }
           
           // Create modified request with specialized system prompt
@@ -209,7 +209,7 @@ export default async function handler(req, res) {
             messages: [
               {
                 role: 'system',
-                content: 'You are an expert astrologer who specializes in career guidance. Keep responses direct and structured, always using bullet points. Be brief but clear.'
+                content: 'You are an expert astrologer who specializes in career guidance. Provide insights in flowing paragraphs rather than lists. Be concise but descriptive.'
               },
               {
                 role: 'user',

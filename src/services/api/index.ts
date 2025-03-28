@@ -282,92 +282,33 @@ class ApiService {
   }
 
   /**
-   * Helper to make authenticated Prokerala API requests with retries
+   * Helper function to format insights for better UI display
    */
-  private async makeProkeralaRequest(endpoint: string, params: Record<string, any>, retryCount = 0): Promise<any> {
-    const maxRetries = 1; // Only retry once
+  private formatInsightForDisplay(insightText: string, insightType: string): string {
+    // Format all insights to be UI-friendly
+    let formattedText = insightText;
     
-    try {
-      // Get a fresh token
-      const token = await this.getProkeralaToken();
+    // Remove any markdown list formatting that might cause display issues
+    formattedText = formattedText.replace(/^\s*[\*\-]\s+/gm, ''); // Remove bullet points
+    formattedText = formattedText.replace(/^\s*\d+\.\s+/gm, '');  // Remove numbered lists
+    
+    // Apply specific formatting based on insight type
+    if (insightType === 'career') {
+      // Try to convert any list-like formatting to paragraphs
+      formattedText = formattedText.replace(/\n\s*[\*\-]\s+/g, '\n');
+      formattedText = formattedText.replace(/\n\s*\d+\.\s+/g, '\n');
       
-      // IMPORTANT: Fix for Prokerala API format issues
-      if (endpoint === 'chart') {
-        // Handle chart_type parameter - Must be properly formatted JSON string
-        if (params.chart_type) {
-          // If it's already a string but looks like JSON with a name property,
-          // extract the name value and use it as a simple string
-          if (typeof params.chart_type === 'string') {
-            try {
-              // Check if it's a JSON string with name property
-              const parsed = JSON.parse(params.chart_type);
-              if (parsed && parsed.name) {
-                // Extract just the name value and convert to lowercase
-                params.chart_type = parsed.name.toLowerCase();
-              } else {
-                // Use as is, just ensure lowercase
-                params.chart_type = params.chart_type.toLowerCase();
-              }
-            } catch (e) {
-              // If not valid JSON, just use as is with lowercase
-              params.chart_type = params.chart_type.toLowerCase();
-            }
-          } else if (typeof params.chart_type === 'object' && params.chart_type.name) {
-            // If it's an object with name property, extract the name
-            params.chart_type = params.chart_type.name.toLowerCase();
-          } else {
-            // Default fallback
-            params.chart_type = 'rasi';
-          }
-        } else {
-          // Set default if missing
-          params.chart_type = 'rasi';
-        }
-        
-        // Ensure chart_style is set
-        if (!params.chart_style) {
-          params.chart_style = 'north-indian';
-        }
-        
-        // This is the crucial fix: Don't add timezone information at all!
-        // The API will handle it with default timezone
-        if (params.datetime) {
-          // Make sure any spaces are converted to 'T'
-          if (params.datetime.includes(' ')) {
-            params.datetime = params.datetime.replace(' ', 'T');
-          }
-          
-          // Important: Remove any timezone information to avoid the double timezone issue
-          params.datetime = params.datetime.replace(/[+-]\d{2}:\d{2}$/, '');
-          
-          console.log('Fixed datetime for chart API:', params.datetime);
-        }
-      }
-      
-      console.log('Final params for API request:', params);
-      
-      // Make the API request with properly formatted parameters
-      const response = await this.client.get(`/api/prokerala-proxy/${endpoint}`, {
-        params,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      return response;
-    } catch (error: any) {
-      // If it's an authentication error and we haven't exceeded retries
-      if (error?.response?.status === 401 && retryCount < maxRetries) {
-        console.log('Authentication error, refreshing token and retrying...');
-        // Reset token and retry
-        this.prokeralaToken = null;
-        this.tokenExpiry = null;
-        return this.makeProkeralaRequest(endpoint, params, retryCount + 1);
-      }
-      
-      // Otherwise propagate the error
-      throw error;
+      // Break up any remaining listed items into sentences
+      formattedText = formattedText.replace(/\n\n+/g, '\n');
     }
+    
+    if (insightType === 'relationship') {
+      // Similar processing for relationship insights
+      formattedText = formattedText.replace(/\n\s*[\*\-]\s+/g, '\n');
+      formattedText = formattedText.replace(/\n\s*\d+\.\s+/g, '\n');
+    }
+    
+    return formattedText;
   }
 
   /**
@@ -410,6 +351,9 @@ class ApiService {
       // Extract the insight from the response
       const responseContent = insightResponse.data.choices[0].message.content;
       
+      // Format the insight for better UI display
+      const formattedContent = this.formatInsightForDisplay(responseContent, insightType);
+      
       // Check if response seems truncated (fewer than 50 tokens or less than 200 characters)
       const tokenCount = insightResponse.data.usage.completion_tokens;
       const isResponseTruncated = tokenCount < 50 || responseContent.length < 200;
@@ -429,10 +373,10 @@ class ApiService {
           let alternativePrompt = "";
           if (nameAndBirth) {
             const [_, name, date, time, place] = nameAndBirth;
-            alternativePrompt = `Based on the natal chart of ${name} (DOB: ${date}, Time: ${time}, Place: ${place}), what are 3-5 career fields that would be most suitable? What professional strengths does this person likely possess? Here is the birth chart data: ${chartData}`;
+            alternativePrompt = `Based on the natal chart of ${name} (DOB: ${date}, Time: ${time}, Place: ${place}), provide key insights about career potential. Instead of bullet points, write 2-3 paragraphs about: 1) Top career fields that would be most suitable, 2) Key professional strengths, and 3) Work environment preferences. Here is the birth chart data: ${chartData}`;
           } else {
             // Fallback if regex doesn't match
-            alternativePrompt = `Based on this birth chart, list 3-5 suitable career paths and key professional strengths. ${chartData}`;
+            alternativePrompt = `Based on this birth chart, provide a narrative description (not bullet points) of suitable career paths and professional strengths. Write in paragraphs rather than lists. ${chartData}`;
           }
           
           // Try the alternative career prompt with exponential backoff
@@ -444,7 +388,7 @@ class ApiService {
                   messages: [
                     {
                       role: "system",
-                      content: "You are an expert astrologer specializing in career guidance based on birth charts."
+                      content: "You are an expert astrologer specializing in career guidance based on birth charts. Provide insights in flowing paragraphs rather than lists."
                     },
                     {
                       role: "user",
@@ -460,16 +404,19 @@ class ApiService {
               2 // Double the delay each time
             );
             
-            const insightContent = retryResponse.data.choices[0].message.content;
+            const retryContent = retryResponse.data.choices[0].message.content;
+            // Format the retry content
+            const formattedRetryContent = this.formatInsightForDisplay(retryContent, insightType);
+            
             // Cache the response
             cache.set(cacheKey, {
               success: true,
               data: {
-                insight: insightContent
+                insight: formattedRetryContent
               }
             });
             
-            return insightContent;
+            return formattedRetryContent;
           } catch (specificRetryError: any) {
             console.error("Career-specific retry also failed:", specificRetryError.message);
           }
@@ -503,16 +450,17 @@ class ApiService {
           );
           
           const simplifiedContent = simplifiedResponse.data.choices[0].message.content;
+          const formattedSimplifiedContent = this.formatInsightForDisplay(simplifiedContent, insightType);
           
           // Cache the simplified response
           cache.set(cacheKey, {
             success: true,
             data: {
-              insight: simplifiedContent
+              insight: formattedSimplifiedContent
             }
           });
           
-          return simplifiedContent;
+          return formattedSimplifiedContent;
         } catch (retryError: any) {
           console.error("Simplified retry also failed:", retryError.message);
           throw new Error(`Failed to generate insight: ${retryError.message}`);
@@ -523,11 +471,11 @@ class ApiService {
       cache.set(cacheKey, {
         success: true,
         data: {
-          insight: responseContent
+          insight: formattedContent
         }
       });
       
-      return responseContent;
+      return formattedContent;
     } catch (error: any) {
       console.error('Error generating AI insight:', error);
       
@@ -563,17 +511,18 @@ class ApiService {
           );
           
           const retryContent = retryResponse.data.choices[0].message.content;
+          const formattedRetryContent = this.formatInsightForDisplay(retryContent, insightType);
           
           // Cache the retry response
           const retryCacheKey = `insight_${insightType}_${simplifiedPrompt.substring(0, 50).replace(/\s+/g, '_').toLowerCase()}`;
           cache.set(retryCacheKey, {
             success: true,
             data: {
-              insight: retryContent
+              insight: formattedRetryContent
             }
           });
           
-          return retryContent;
+          return formattedRetryContent;
         } catch (retryError: any) {
           throw new Error(`Failed to generate insight: ${retryError.message}`);
         }
@@ -722,8 +671,8 @@ class ApiService {
         await this.delay(5000); // Increased from 1000ms to 5000ms
         
         // Get relationship insights
-        const relationshipPrompt = `Generate a relationship reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on relationship patterns, compatibility, and advice for relationships. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const relationshipInsight = await this.getAIInsight(relationshipPrompt, "You are an expert Vedic astrologer specializing in relationship analysis.", "relationship");
+        const relationshipPrompt = `Generate a relationship reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on relationship patterns, compatibility, and advice for relationships. Format your response as flowing paragraphs, not bullet points or lists. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
+        const relationshipInsight = await this.getAIInsight(relationshipPrompt, "You are an expert Vedic astrologer specializing in relationship analysis. Provide insights in flowing narrative paragraphs rather than lists.", "relationship");
         
         // Combine insights with headings
         const combinedInsight = `
@@ -739,11 +688,17 @@ ${careerInsight}
 ${relationshipInsight}
 `;
         
+        // Ensure proper formatting of the final insight
+        const formattedCombinedInsight = combinedInsight
+          .replace(/\n{3,}/g, '\n\n') // Replace excessive newlines with double newlines
+          .replace(/^\s*[\*\-]\s+/gm, '') // Remove any remaining bullet points
+          .replace(/^\s*\d+\.\s+/gm, ''); // Remove any remaining numbered lists
+        
         // Create the response
         const response: ApiResponse = {
           success: true,
           data: {
-            insight: combinedInsight
+            insight: formattedCombinedInsight
           }
         };
         
@@ -943,6 +898,95 @@ ${relationshipInsight}
    */
   getCurrentDeploymentDomain(): string {
     return window.location.origin;
+  }
+
+  /**
+   * Helper to make authenticated Prokerala API requests with retries
+   */
+  private async makeProkeralaRequest(endpoint: string, params: Record<string, any>, retryCount = 0): Promise<any> {
+    const maxRetries = 1; // Only retry once
+    
+    try {
+      // Get a fresh token
+      const token = await this.getProkeralaToken();
+      
+      // IMPORTANT: Fix for Prokerala API format issues
+      if (endpoint === 'chart') {
+        // Handle chart_type parameter - Must be properly formatted JSON string
+        if (params.chart_type) {
+          // If it's already a string but looks like JSON with a name property,
+          // extract the name value and use it as a simple string
+          if (typeof params.chart_type === 'string') {
+            try {
+              // Check if it's a JSON string with name property
+              const parsed = JSON.parse(params.chart_type);
+              if (parsed && parsed.name) {
+                // Extract just the name value and convert to lowercase
+                params.chart_type = parsed.name.toLowerCase();
+              } else {
+                // Use as is, just ensure lowercase
+                params.chart_type = params.chart_type.toLowerCase();
+              }
+            } catch (e) {
+              // If not valid JSON, just use as is with lowercase
+              params.chart_type = params.chart_type.toLowerCase();
+            }
+          } else if (typeof params.chart_type === 'object' && params.chart_type.name) {
+            // If it's an object with name property, extract the name
+            params.chart_type = params.chart_type.name.toLowerCase();
+          } else {
+            // Default fallback
+            params.chart_type = 'rasi';
+          }
+        } else {
+          // Set default if missing
+          params.chart_type = 'rasi';
+        }
+        
+        // Ensure chart_style is set
+        if (!params.chart_style) {
+          params.chart_style = 'north-indian';
+        }
+        
+        // This is the crucial fix: Don't add timezone information at all!
+        // The API will handle it with default timezone
+        if (params.datetime) {
+          // Make sure any spaces are converted to 'T'
+          if (params.datetime.includes(' ')) {
+            params.datetime = params.datetime.replace(' ', 'T');
+          }
+          
+          // Important: Remove any timezone information to avoid the double timezone issue
+          params.datetime = params.datetime.replace(/[+-]\d{2}:\d{2}$/, '');
+          
+          console.log('Fixed datetime for chart API:', params.datetime);
+        }
+      }
+      
+      console.log('Final params for API request:', params);
+      
+      // Make the API request with properly formatted parameters
+      const response = await this.client.get(`/api/prokerala-proxy/${endpoint}`, {
+        params,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      return response;
+    } catch (error: any) {
+      // If it's an authentication error and we haven't exceeded retries
+      if (error?.response?.status === 401 && retryCount < maxRetries) {
+        console.log('Authentication error, refreshing token and retrying...');
+        // Reset token and retry
+        this.prokeralaToken = null;
+        this.tokenExpiry = null;
+        return this.makeProkeralaRequest(endpoint, params, retryCount + 1);
+      }
+      
+      // Otherwise propagate the error
+      throw error;
+    }
   }
 }
 
