@@ -49,11 +49,14 @@ export default async function handler(req, res) {
   }
   
   try {
-    // Get API key from environment variables
-    const apiKey = process.env.VITE_TOGETHER_API_KEY || process.env.TOGETHER_API_KEY;
+    // Get API key from environment variables - try multiple sources
+    const apiKey = process.env.TOGETHER_API_KEY || 
+                   process.env.VITE_TOGETHER_API_KEY || 
+                   process.env.NEXT_PUBLIC_TOGETHER_API_KEY;
     
     if (!apiKey) {
-      console.error('Missing Together AI API key. Environment variables available:', Object.keys(process.env).filter(key => key.includes('TOGETHER')));
+      console.error('Missing Together AI API key. Environment variables available:', 
+        Object.keys(process.env).filter(key => key.includes('TOGETHER') || key.includes('API')));
       return res.status(500).set(corsHeaders).json({
         error: 'Missing API key',
         message: 'Together AI API key is not configured'
@@ -70,7 +73,11 @@ export default async function handler(req, res) {
       });
     }
     
-    // Forward request to Together AI API
+    // Configure shorter timeout to prevent Vercel 504 errors
+    // Most serverless functions have 10 second timeouts
+    const TIMEOUT_MS = 8000; // 8 seconds timeout
+    
+    // Forward request to Together AI API with timeout
     const response = await axios({
       method: 'POST',
       url: 'https://api.together.xyz/v1/chat/completions',
@@ -78,7 +85,14 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      data: req.body
+      data: {
+        ...req.body,
+        // Add temperature if not provided to make responses faster
+        temperature: req.body.temperature || 0.3,
+        // Limit max_tokens if not provided to prevent timeouts
+        max_tokens: req.body.max_tokens || 500
+      },
+      timeout: TIMEOUT_MS // Set request timeout
     });
     
     // Set CORS headers
@@ -96,14 +110,29 @@ export default async function handler(req, res) {
       res.setHeader(key, corsHeaders[key]);
     });
     
+    // Specific error for timeout
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return res.status(504).json({ 
+        error: 'Request timeout',
+        message: 'The request to Together AI API timed out. Try reducing the complexity of your query or max_tokens.',
+        code: '504'
+      });
+    }
+    
     // Forward the error response from Together AI
     if (error.response) {
-      return res.status(error.response.status).json(error.response.data);
+      return res.status(error.response.status || 500).json({
+        error: 'API response error',
+        message: error.response.data?.error?.message || error.message,
+        details: error.response.data,
+        code: error.response.status.toString()
+      });
     }
     
     return res.status(500).json({ 
       error: 'API error',
-      message: error.message
+      message: error.message,
+      code: '500'
     });
   }
 } 

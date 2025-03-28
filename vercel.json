@@ -10,9 +10,22 @@
     },
     {
       "src": "api/**/*.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 30
+      }
     }
   ],
+  "functions": {
+    "api/together-chat.js": {
+      "memory": 1024,
+      "maxDuration": 20
+    },
+    "api/prokerala-proxy.js": {
+      "memory": 1024,
+      "maxDuration": 25
+    }
+  },
   "rewrites": [
     { "source": "/api/prokerala-proxy", "destination": "/api/prokerala-proxy.js" },
     { "source": "/api/prokerala-proxy/:path*", "destination": "/api/prokerala-proxy.js" },
