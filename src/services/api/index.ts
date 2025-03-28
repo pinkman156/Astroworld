@@ -242,6 +242,46 @@ class ApiService {
   }
 
   /**
+   * Helper function for exponential backoff retry
+   * @param fn Function to retry
+   * @param retries Maximum number of retries
+   * @param baseDelay Base delay in milliseconds
+   * @param factor Exponential factor
+   */
+  private async retryWithExponentialBackoff<T>(
+    fn: () => Promise<T>,
+    retries = 3,
+    baseDelay = 1000,
+    factor = 2
+  ): Promise<T> {
+    let attempt = 0;
+    let lastError: any;
+
+    while (attempt < retries) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        attempt++;
+        
+        if (attempt >= retries) break;
+        
+        // Calculate exponential backoff delay
+        const delay = baseDelay * Math.pow(factor, attempt - 1);
+        const jitter = Math.random() * 1000; // Add some randomness
+        const totalDelay = delay + jitter;
+        
+        console.log(`API request failed. Retrying in ${Math.round(totalDelay / 1000)} seconds (attempt ${attempt}/${retries})`);
+        
+        // Wait for the calculated delay
+        await this.delay(totalDelay);
+      }
+    }
+    
+    throw lastError;
+  }
+
+  /**
    * Helper to make authenticated Prokerala API requests with retries
    */
   private async makeProkeralaRequest(endpoint: string, params: Record<string, any>, retryCount = 0): Promise<any> {
@@ -333,26 +373,161 @@ class ApiService {
   /**
    * Get AI-generated insight with a specific prompt
    */
-  async getAIInsight(prompt: string, systemPrompt: string = "You are an expert Vedic astrologer."): Promise<string> {
+  async getAIInsight(prompt: string, systemPrompt: string = "You are an expert Vedic astrologer.", insightType: string = "general"): Promise<string> {
     try {
-      const insightResponse = await this.client.post('/api/together/chat', {
-        model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 10000 // Use reasonable max_tokens value to respect model context limits
-      });
+      // First, check if we have a cached response for this prompt
+      const cacheKey = `insight_${insightType}_${prompt.substring(0, 50).replace(/\s+/g, '_').toLowerCase()}`;
+      const cachedResponse = cache.get(cacheKey);
+      if (cachedResponse) {
+        console.log(`Using cached ${insightType} insight`);
+        return cachedResponse.data.insight;
+      }
+      
+      // Try with exponential backoff
+      const insightResponse = await this.retryWithExponentialBackoff(
+        async () => {
+          return await this.client.post('/api/together/chat', {
+            model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 10000
+          });
+        },
+        2, // Max 2 retries
+        1000, // Start with 1 second delay
+        3 // Triple the delay each time
+      );
       
       // Extract the insight from the response
-      return insightResponse.data.choices[0].message.content;
+      const responseContent = insightResponse.data.choices[0].message.content;
+      
+      // Check if response seems truncated (fewer than 50 tokens or less than 200 characters)
+      const tokenCount = insightResponse.data.usage.completion_tokens;
+      const isResponseTruncated = tokenCount < 50 || responseContent.length < 200;
+      
+      if (isResponseTruncated) {
+        console.warn(`Response appears truncated (${tokenCount} tokens). Retrying with modified prompt.`);
+        
+        // For career insights specifically, try a different approach if it's truncated
+        if (insightType === "career") {
+          console.log("Retrying with alternative career prompt formulation");
+          
+          // Different formulation of the career question
+          const careerPromptParts = prompt.split("Here is the birth chart data:");
+          const chartData = careerPromptParts[1];
+          const nameAndBirth = prompt.match(/for\s+([^.]+)\s+born\s+on\s+([^.]+)\s+at\s+([^.]+)\s+in\s+([^.]+)/);
+          
+          let alternativePrompt = "";
+          if (nameAndBirth) {
+            const [_, name, date, time, place] = nameAndBirth;
+            alternativePrompt = `Based on the natal chart of ${name} (DOB: ${date}, Time: ${time}, Place: ${place}), what are 3-5 career fields that would be most suitable? What professional strengths does this person likely possess? Here is the birth chart data: ${chartData}`;
+          } else {
+            // Fallback if regex doesn't match
+            alternativePrompt = `Based on this birth chart, list 3-5 suitable career paths and key professional strengths. ${chartData}`;
+          }
+          
+          // Try the alternative career prompt with exponential backoff
+          try {
+            const retryResponse = await this.retryWithExponentialBackoff(
+              async () => {
+                return await this.client.post('/api/together/chat', {
+                  model: "mistralai/Mixtral-8x7B-Instruct-v0.1", 
+                  messages: [
+                    {
+                      role: "system",
+                      content: "You are an expert astrologer specializing in career guidance based on birth charts."
+                    },
+                    {
+                      role: "user",
+                      content: alternativePrompt
+                    }
+                  ],
+                  temperature: 0.7,
+                  max_tokens: 10000
+                });
+              },
+              2, // Max 2 retries
+              3000, // Start with 3 second delay for alternative prompt
+              2 // Double the delay each time
+            );
+            
+            const insightContent = retryResponse.data.choices[0].message.content;
+            // Cache the response
+            cache.set(cacheKey, {
+              success: true,
+              data: {
+                insight: insightContent
+              }
+            });
+            
+            return insightContent;
+          } catch (specificRetryError: any) {
+            console.error("Career-specific retry also failed:", specificRetryError.message);
+          }
+        }
+        
+        // General retry for truncated responses with a simpler approach
+        const simplifiedPrompt = `${prompt.split('.')[0]}. Keep response very concise and focused.`;
+        
+        try {
+          const simplifiedResponse = await this.retryWithExponentialBackoff(
+            async () => {
+              return await this.client.post('/api/together/chat', {
+                model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                messages: [
+                  {
+                    role: "system",
+                    content: systemPrompt
+                  },
+                  {
+                    role: "user",
+                    content: simplifiedPrompt
+                  }
+                ],
+                temperature: 0.7,
+                max_tokens: 10000
+              });
+            },
+            2, // Max 2 retries
+            2000, // Start with 2 second delay
+            2 // Double the delay each time
+          );
+          
+          const simplifiedContent = simplifiedResponse.data.choices[0].message.content;
+          
+          // Cache the simplified response
+          cache.set(cacheKey, {
+            success: true,
+            data: {
+              insight: simplifiedContent
+            }
+          });
+          
+          return simplifiedContent;
+        } catch (retryError: any) {
+          console.error("Simplified retry also failed:", retryError.message);
+          throw new Error(`Failed to generate insight: ${retryError.message}`);
+        }
+      }
+      
+      // Cache successful response
+      cache.set(cacheKey, {
+        success: true,
+        data: {
+          insight: responseContent
+        }
+      });
+      
+      return responseContent;
     } catch (error: any) {
       console.error('Error generating AI insight:', error);
       
@@ -364,23 +539,41 @@ class ApiService {
         const simplifiedPrompt = `${prompt.split('.')[0]}. Keep it brief and focused.`;
         
         try {
-          const retryResponse = await this.client.post('/api/together/chat', {
-            model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-            messages: [
-              {
-                role: "system",
-                content: systemPrompt
-              },
-              {
-                role: "user",
-                content: simplifiedPrompt
-              }
-            ],
-            temperature: 0.7,
-            max_tokens: 10000 // Use reasonable max_tokens value
+          const retryResponse = await this.retryWithExponentialBackoff(
+            async () => {
+              return await this.client.post('/api/together/chat', {
+                model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                messages: [
+                  {
+                    role: "system",
+                    content: systemPrompt
+                  },
+                  {
+                    role: "user",
+                    content: simplifiedPrompt
+                  }
+                ],
+                temperature: 0.7,
+                max_tokens: 10000
+              });
+            },
+            2, // Max 2 retries
+            3000, // Start with 3 second delay
+            2 // Double the delay each time
+          );
+          
+          const retryContent = retryResponse.data.choices[0].message.content;
+          
+          // Cache the retry response
+          const retryCacheKey = `insight_${insightType}_${simplifiedPrompt.substring(0, 50).replace(/\s+/g, '_').toLowerCase()}`;
+          cache.set(retryCacheKey, {
+            success: true,
+            data: {
+              insight: retryContent
+            }
           });
           
-          return retryResponse.data.choices[0].message.content;
+          return retryContent;
         } catch (retryError: any) {
           throw new Error(`Failed to generate insight: ${retryError.message}`);
         }
@@ -516,21 +709,21 @@ class ApiService {
         // Process requests sequentially with delays between each
         // Get personality traits
         const personalityPrompt = `Generate a personality reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on personality traits, strengths, and challenges. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const personalityInsight = await this.getAIInsight(personalityPrompt);
+        const personalityInsight = await this.getAIInsight(personalityPrompt, "You are an expert Vedic astrologer.", "personality");
         
         // Add delay between requests
-        await this.delay(1000);
+        await this.delay(5000); // Increased from 1000ms to 5000ms
         
-        // Get career insights
+        // Get career insights - use different formulation for career specifically
         const careerPrompt = `Generate a career reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on career prospects, professional strengths, and potential career paths. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const careerInsight = await this.getAIInsight(careerPrompt);
+        const careerInsight = await this.getAIInsight(careerPrompt, "You are an expert Vedic astrologer specializing in career guidance based on birth charts.", "career");
         
         // Add delay between requests
-        await this.delay(1000);
+        await this.delay(5000); // Increased from 1000ms to 5000ms
         
         // Get relationship insights
         const relationshipPrompt = `Generate a relationship reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on relationship patterns, compatibility, and advice for relationships. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const relationshipInsight = await this.getAIInsight(relationshipPrompt);
+        const relationshipInsight = await this.getAIInsight(relationshipPrompt, "You are an expert Vedic astrologer specializing in relationship analysis.", "relationship");
         
         // Combine insights with headings
         const combinedInsight = `
