@@ -248,25 +248,33 @@ class ApiService {
       if (endpoint === 'chart') {
         // Handle chart_type parameter - Must be properly formatted JSON string
         if (params.chart_type) {
-          // If it's already a string, make sure it's valid JSON
+          // If it's already a string but looks like JSON with a name property,
+          // extract the name value and use it as a simple string
           if (typeof params.chart_type === 'string') {
             try {
-              // Validate it's valid JSON
-              JSON.parse(params.chart_type);
+              // Check if it's a JSON string with name property
+              const parsed = JSON.parse(params.chart_type);
+              if (parsed && parsed.name) {
+                // Extract just the name value and convert to lowercase
+                params.chart_type = parsed.name.toLowerCase();
+              } else {
+                // Use as is, just ensure lowercase
+                params.chart_type = params.chart_type.toLowerCase();
+              }
             } catch (e) {
-              // If not valid JSON, create a valid one
-              params.chart_type = '{"name":"Rasi"}';
+              // If not valid JSON, just use as is with lowercase
+              params.chart_type = params.chart_type.toLowerCase();
             }
-          } else if (typeof params.chart_type === 'object') {
-            // If it's an object, stringify it
-            params.chart_type = JSON.stringify(params.chart_type);
+          } else if (typeof params.chart_type === 'object' && params.chart_type.name) {
+            // If it's an object with name property, extract the name
+            params.chart_type = params.chart_type.name.toLowerCase();
           } else {
             // Default fallback
-            params.chart_type = '{"name":"Rasi"}';
+            params.chart_type = 'rasi';
           }
         } else {
           // Set default if missing
-          params.chart_type = '{"name":"Rasi"}';
+          params.chart_type = 'rasi';
         }
         
         // Ensure chart_style is set
@@ -385,7 +393,7 @@ class ApiService {
         datetime: isoDateTime,
         coordinates,
         ayanamsa: 1, // Lahiri ayanamsa
-        chart_type: JSON.stringify({ name: "Rasi" }), // Make sure to stringify
+        chart_type: "rasi", // Use a simple string instead of JSON object
         chart_style: 'north-indian'
       });
       
@@ -502,7 +510,7 @@ class ApiService {
           datetime: isoDateTime, // ISO format for chart endpoint
           coordinates: coordinates,
           ayanamsa: 1,
-          chart_type: JSON.stringify({ name: "Rasi" }), // Make sure to stringify
+          chart_type: "rasi", // Use a simple string instead of JSON object
           chart_style: 'north-indian'
         }),
         

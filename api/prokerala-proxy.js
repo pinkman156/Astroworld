@@ -91,6 +91,9 @@ async function getChartDataFallback(chartParams) {
     const date = datetimeParts[0];
     const time = datetimeParts[1];
     
+    // Get chart type - should be a simple string now
+    const chartType = chartParams.chart_type.charAt(0).toUpperCase() + chartParams.chart_type.slice(1).toLowerCase();
+    
     // Create a detailed prompt for the AI
     const prompt = [
       {
@@ -99,7 +102,7 @@ async function getChartDataFallback(chartParams) {
       },
       {
         "role": "user",
-        "content": `Generate detailed astrological information for a ${chartParams.chart_type.name} chart with the following birth details:
+        "content": `Generate detailed astrological information for a ${chartType} chart with the following birth details:
         
 Date: ${date}
 Time: ${time}
@@ -167,7 +170,7 @@ Format your response as JSON with structured data that can be used to display or
       data: {
         chart_data: jsonData || { text: aiResponse },
         source: "together_ai_fallback",
-        chart_type: chartParams.chart_type.name,
+        chart_type: chartParams.chart_type,
         chart_style: chartParams.chart_style,
         input_parameters: chartParams
       }
@@ -493,13 +496,9 @@ async function prokeralaApiRequest(req, res, endpoint) {
     
     // Add chart-specific parameters
     if (endpoint === 'chart') {
-      // CRITICAL FIX: Format chart_type as an object with name property
-      // First letter capitalized for proper formatting
-      const chartTypeName = chartType.charAt(0).toUpperCase() + chartType.slice(1).toLowerCase();
-      
-      // Instead of adding the chart_type as a string parameter, 
-      // create a proper JSON object directly in the params object
-      params.chart_type = { name: chartTypeName };
+      // CRITICAL FIX: Format chart_type as a simple string parameter (not an object with name property)
+      // First letter should be lowercase as per the API's expectation
+      params.chart_type = chartType.toLowerCase();
       
       params.chart_style = query.chart_style;
       params.format = query.format || 'svg';  // Default to svg format as required
@@ -699,6 +698,7 @@ export default async function handler(req, res) {
         try {
           // If it's an object with a name property, extract the name
           if (typeof query.chart_type === 'object' && query.chart_type.name) {
+            // Just use the name as a lowercase string
             processedChartType = query.chart_type.name.toLowerCase();
           } else if (typeof query.chart_type === 'string') {
             // Try to parse as JSON if it looks like JSON
@@ -706,6 +706,7 @@ export default async function handler(req, res) {
               try {
                 const parsed = JSON.parse(query.chart_type);
                 if (parsed && parsed.name) {
+                  // Just extract the name as a string
                   processedChartType = parsed.name.toLowerCase();
                 } else {
                   throw new Error('Invalid JSON format for chart_type');
@@ -788,13 +789,8 @@ export default async function handler(req, res) {
       };
       
       if (path === 'chart') {
-        // First letter capitalized for proper formatting
-        const chartTypeName = processedChartType ? 
-          processedChartType.charAt(0).toUpperCase() + processedChartType.slice(1).toLowerCase() : 
-          null;
-        
-        // Use object format instead of string
-        finalParams.chart_type = chartTypeName ? { name: chartTypeName } : processedChartType;
+        // Use lowercase for chart_type as expected by the API
+        finalParams.chart_type = processedChartType ? processedChartType.toLowerCase() : null;
         finalParams.chart_style = query.chart_style;
         finalParams.format = query.format || 'svg';
       }
