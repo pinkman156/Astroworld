@@ -12,7 +12,7 @@
       "src": "api/together-chat.js",
       "use": "@vercel/node",
       "config": {
-        "maxDuration": 20,
+        "maxDuration": 15,
         "memory": 1024
       }
     },

@@ -235,6 +235,13 @@ class ApiService {
   }
 
   /**
+   * Helper function to delay execution
+   */
+  private async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
    * Helper to make authenticated Prokerala API requests with retries
    */
   private async makeProkeralaRequest(endpoint: string, params: Record<string, any>, retryCount = 0): Promise<any> {
@@ -457,6 +464,9 @@ class ApiService {
         chart_style: 'north-indian'
       });
       
+      // Add a small delay before next request to prevent overloading
+      await this.delay(500);
+      
       // Get kundli data for additional details
       const kundliResponse = await this.makeProkeralaRequest('kundli', {
         datetime: formattedDateTime,
@@ -470,20 +480,56 @@ class ApiService {
         kundli: kundliResponse.data
       };
       
+      // Helper function to reduce data size
+      const summarizeChartData = (data: any): any => {
+        // Create a summarized version of the chart data to reduce payload size
+        const summary: any = {};
+        
+        // Extract only essential information from chart data
+        if (data.chart && data.chart.data) {
+          const chartSummary: any = {};
+          if (data.chart.data.chart_type) chartSummary.chart_type = data.chart.data.chart_type;
+          if (data.chart.data.planet_positions) chartSummary.planet_positions = data.chart.data.planet_positions;
+          // Don't include SVG or other heavy content
+          summary.chart = { data: chartSummary };
+        }
+        
+        // Extract only essential information from kundli data
+        if (data.kundli && data.kundli.data) {
+          const kundliSummary: any = {};
+          if (data.kundli.data.nakshatra_details) kundliSummary.nakshatra_details = data.kundli.data.nakshatra_details;
+          if (data.kundli.data.yoga_details) kundliSummary.yoga_details = data.kundli.data.yoga_details;
+          if (data.kundli.data.mangal_dosha) kundliSummary.mangal_dosha = data.kundli.data.mangal_dosha;
+          summary.kundli = { data: kundliSummary };
+        }
+        
+        return summary;
+      };
+      
+      // Use the summarized version for AI requests
+      const summarizedChartData = summarizeChartData(chartData);
+      
       // Break down the complex query into multiple smaller, focused queries
       try {
         console.log('Breaking down complex astrological query into focused segments');
         
+        // Process requests sequentially with delays between each
         // Get personality traits
-        const personalityPrompt = `Generate a personality reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on personality traits, strengths, and challenges. Here is the birth chart data: ${JSON.stringify(chartData)}`;
+        const personalityPrompt = `Generate a personality reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on personality traits, strengths, and challenges. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         const personalityInsight = await this.getAIInsight(personalityPrompt);
         
+        // Add delay between requests
+        await this.delay(1000);
+        
         // Get career insights
-        const careerPrompt = `Generate a career reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on career prospects, professional strengths, and potential career paths. Here is the birth chart data: ${JSON.stringify(chartData)}`;
+        const careerPrompt = `Generate a career reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on career prospects, professional strengths, and potential career paths. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         const careerInsight = await this.getAIInsight(careerPrompt);
         
+        // Add delay between requests
+        await this.delay(1000);
+        
         // Get relationship insights
-        const relationshipPrompt = `Generate a relationship reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on relationship patterns, compatibility, and advice for relationships. Here is the birth chart data: ${JSON.stringify(chartData)}`;
+        const relationshipPrompt = `Generate a relationship reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on relationship patterns, compatibility, and advice for relationships. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         const relationshipInsight = await this.getAIInsight(relationshipPrompt);
         
         // Combine insights with headings
@@ -517,7 +563,7 @@ ${relationshipInsight}
         console.error('Error with segmented approach, falling back to single request:', segmentError);
         
         // Fallback to a single request but with simpler prompt
-        const fallbackPrompt = `Generate a concise astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus on the most important insights only. Here is the birth chart data: ${JSON.stringify(chartData)}`;
+        const fallbackPrompt = `Generate a concise astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus on the most important insights only. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         
         const fallbackInsight = await this.getAIInsight(fallbackPrompt);
         

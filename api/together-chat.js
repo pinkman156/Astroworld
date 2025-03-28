@@ -116,7 +116,7 @@ export default async function handler(req, res) {
           'Authorization': `Bearer ${apiKey}`
         },
         data: requestData,
-        timeout: 30000 // 30 second timeout for complex astrological queries
+        timeout: 15000 // 15 second timeout to stay within Vercel's function limits
       });
       
       // Log success and timing
@@ -130,13 +130,58 @@ export default async function handler(req, res) {
       const duration = Date.now() - startTime;
       console.error(`API request failed (${duration}ms): ${apiError.message}`);
       
-      // Handle timeouts
+      // Handle timeouts by retrying with a simplified request
       if (apiError.code === 'ECONNABORTED' || apiError.message.includes('timeout')) {
-        return res.status(504).json({
-          error: 'Gateway timeout',
-          message: 'The request to the AI service timed out',
-          details: apiError.message
-        });
+        console.log('Request timed out. Attempting retry with simplified prompt...');
+        
+        try {
+          // Create a simplified version of the original request data
+          const simplifiedMessages = requestData.messages.map(msg => {
+            if (msg.role === 'user') {
+              // Simplify user message by taking first sentence and adding brevity instruction
+              const content = msg.content.split('.')[0] + '. Keep response very brief and focused.';
+              return { ...msg, content };
+            }
+            return msg;
+          });
+          
+          // Create simplified request with lower token limit
+          const simplifiedRequest = {
+            ...requestData,
+            messages: simplifiedMessages,
+            max_tokens: Math.min(1000, requestData.max_tokens) // Use smaller token limit for retry
+          };
+          
+          // Log the retry attempt
+          console.log('Retrying with simplified request');
+          
+          // Make simplified request with shorter timeout
+          const retryResponse = await axios({
+            method: 'POST',
+            url: 'https://api.together.xyz/v1/chat/completions',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            data: simplifiedRequest,
+            timeout: 10000 // Shorter timeout for retry
+          });
+          
+          // Log success of retry
+          const retryDuration = Date.now() - startTime;
+          console.log(`Retry request successful (${retryDuration}ms)`);
+          
+          // Return the retry response
+          return res.status(200).json(retryResponse.data);
+        } catch (retryError) {
+          // If retry also fails, continue to standard error handling
+          console.error('Retry also failed:', retryError.message);
+          return res.status(504).json({
+            error: 'Gateway timeout',
+            message: 'The request to the AI service timed out even after retry',
+            details: 'Try breaking your query into smaller parts or simplifying your request'
+          });
+        }
       }
       
       // Handle API errors with response
