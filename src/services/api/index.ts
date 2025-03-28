@@ -324,6 +324,66 @@ class ApiService {
   }
 
   /**
+   * Get AI-generated insight with a specific prompt
+   */
+  async getAIInsight(prompt: string, systemPrompt: string = "You are an expert Vedic astrologer."): Promise<string> {
+    try {
+      const insightResponse = await this.client.post('/api/together/chat', {
+        model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000000 // Use high max_tokens value to avoid truncation
+      });
+      
+      // Extract the insight from the response
+      return insightResponse.data.choices[0].message.content;
+    } catch (error: any) {
+      console.error('Error generating AI insight:', error);
+      
+      // If it times out or fails, retry with a simpler prompt
+      if (error.message && (error.message.includes('timeout') || error.response?.status === 504)) {
+        console.log('Request timed out. Retrying with simpler prompt...');
+        
+        // Create a simpler version of the prompt
+        const simplifiedPrompt = `${prompt.split('.')[0]}. Keep it brief and focused.`;
+        
+        try {
+          const retryResponse = await this.client.post('/api/together/chat', {
+            model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: simplifiedPrompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000000
+          });
+          
+          return retryResponse.data.choices[0].message.content;
+        } catch (retryError: any) {
+          throw new Error(`Failed to generate insight: ${retryError.message}`);
+        }
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
    * Get astrological insight for the provided birth data
    */
   async getAstrologyInsight(birthData: BirthData): Promise<ApiResponse> {
@@ -397,38 +457,84 @@ class ApiService {
         chart_style: 'north-indian'
       });
       
-      // Create the insight using Together AI
-      const insightResponse = await this.client.post('/api/together/chat', {
-        model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert Vedic astrologer. Analyze the birth chart data and provide a comprehensive astrological reading."
-          },
-          {
-            role: "user",
-            content: `Generate an astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Here is the birth chart data: ${JSON.stringify(chartResponse.data)}`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
+      // Get kundli data for additional details
+      const kundliResponse = await this.makeProkeralaRequest('kundli', {
+        datetime: formattedDateTime,
+        coordinates,
+        ayanamsa: 1
       });
       
-      // Extract the insight from the response
-      const insight = insightResponse.data.choices[0].message.content;
-      
-      // Create the response
-      const response: ApiResponse = {
-        success: true,
-        data: {
-          insight
-        }
+      // Create the chart data summary for AI
+      const chartData = {
+        chart: chartResponse.data,
+        kundli: kundliResponse.data
       };
       
-      // Cache the response
-      cache.set(cacheKey, response);
+      // Break down the complex query into multiple smaller, focused queries
+      try {
+        console.log('Breaking down complex astrological query into focused segments');
+        
+        // Get personality traits
+        const personalityPrompt = `Generate a personality reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on personality traits, strengths, and challenges. Here is the birth chart data: ${JSON.stringify(chartData)}`;
+        const personalityInsight = await this.getAIInsight(personalityPrompt);
+        
+        // Get career insights
+        const careerPrompt = `Generate a career reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on career prospects, professional strengths, and potential career paths. Here is the birth chart data: ${JSON.stringify(chartData)}`;
+        const careerInsight = await this.getAIInsight(careerPrompt);
+        
+        // Get relationship insights
+        const relationshipPrompt = `Generate a relationship reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on relationship patterns, compatibility, and advice for relationships. Here is the birth chart data: ${JSON.stringify(chartData)}`;
+        const relationshipInsight = await this.getAIInsight(relationshipPrompt);
+        
+        // Combine insights with headings
+        const combinedInsight = `
+# Astrological Reading for ${birthData.name}
+
+## Personality Insights
+${personalityInsight}
+
+## Career Insights
+${careerInsight}
+
+## Relationship Insights
+${relationshipInsight}
+`;
+        
+        // Create the response
+        const response: ApiResponse = {
+          success: true,
+          data: {
+            insight: combinedInsight
+          }
+        };
+        
+        // Cache the response
+        cache.set(cacheKey, response);
+        
+        return response;
+        
+      } catch (segmentError: any) {
+        console.error('Error with segmented approach, falling back to single request:', segmentError);
+        
+        // Fallback to a single request but with simpler prompt
+        const fallbackPrompt = `Generate a concise astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus on the most important insights only. Here is the birth chart data: ${JSON.stringify(chartData)}`;
+        
+        const fallbackInsight = await this.getAIInsight(fallbackPrompt);
+        
+        // Create the response
+        const response: ApiResponse = {
+          success: true,
+          data: {
+            insight: fallbackInsight
+          }
+        };
+        
+        // Cache the response
+        cache.set(cacheKey, response);
+        
+        return response;
+      }
       
-      return response;
     } catch (error: any) {
       console.error('Error generating astrological insight:', error);
       

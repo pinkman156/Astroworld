@@ -62,6 +62,48 @@ The application uses an API service class located at `src/services/api/index.ts`
 - Managing API authentication
 - Handling errors
 
+### Optimizing Together AI Requests
+
+When making requests to the Together AI API for complex astrological analysis, follow these best practices:
+
+#### Token Limit Optimization
+- The default `max_tokens` limit is set to 1,000,000 to avoid truncated responses for complex astrological analyses
+- You can specify a lower limit for simpler queries if needed
+- Example: `{ max_tokens: 500 }` for basic zodiac descriptions
+
+#### Timeout Handling
+- The API server has a 30-second timeout for complex queries (note: Together AI's servers still have an 8-second timeout)
+- Client-side requests should include appropriate timeout handling
+
+#### Breaking Down Complex Queries
+For comprehensive astrological analyses, break down complex queries into smaller, focused requests:
+1. Request personality traits and characteristics in one call
+2. Request career insights in a separate call
+3. Request relationship compatibility in another call
+
+Example of breaking down complex queries:
+```typescript
+// Instead of one complex query
+const complexResponse = await api.getAIInsight(
+  "Provide a comprehensive analysis of Sun in Gemini, Moon in Scorpio including personality, career, and relationships"
+);
+
+// Break it down into separate queries
+const personalityResponse = await api.getAIInsight(
+  "Describe the personality traits of someone with Sun in Gemini, Moon in Scorpio"
+);
+
+const careerResponse = await api.getAIInsight(
+  "What are the career insights for someone with Sun in Gemini, Moon in Scorpio?"
+);
+
+const relationshipResponse = await api.getAIInsight(
+  "Describe relationship compatibility for someone with Sun in Gemini, Moon in Scorpio"
+);
+```
+
+This approach provides more reliable responses and avoids timeout issues with complex queries.
+
 ### Example Usage
 
 ```typescript

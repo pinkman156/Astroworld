@@ -100,14 +100,14 @@ export default async function handler(req, res) {
       model: req.body.model,
       messages: req.body.messages,
       temperature: req.body.temperature || 0.7,
-      max_tokens: Math.min(req.body.max_tokens || 200, 500), // Cap at 500 tokens
+      max_tokens: Math.min(req.body.max_tokens || 1000000, 1000000), // Cap at 1000000 tokens for comprehensive responses
     };
     
     // Log request (without sensitive data)
     console.log(`API request: ${requestData.model}, ${requestData.messages.length} messages`);
     
     try {
-      // Make request to Together AI with short timeout
+      // Make request to Together AI with long timeout
       const response = await axios({
         method: 'POST',
         url: 'https://api.together.xyz/v1/chat/completions',
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
           'Authorization': `Bearer ${apiKey}`
         },
         data: requestData,
-        timeout: 8000 // 8 second timeout
+        timeout: 30000 // 30 second timeout for complex astrological queries
       });
       
       // Log success and timing
