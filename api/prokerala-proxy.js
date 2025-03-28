@@ -355,31 +355,36 @@ async function prokeralaApiRequest(req, res, endpoint) {
         // Add +05:30 for India Standard Time as required by Prokerala
         decodedDatetime += '+05:30';
       } else {
-        // For other endpoints, use the standard format with space
-        if (decodedDatetime.includes('T')) {
-          decodedDatetime = decodedDatetime.replace('T', ' ');
+        // For other endpoints, use the ISO 8601 format with 'T' separator
+        // Ensure 'T' separator is used instead of space
+        if (!decodedDatetime.includes('T')) {
+          decodedDatetime = decodedDatetime.replace(' ', 'T');
         }
         
-        // Remove timezone if present
-        decodedDatetime = decodedDatetime.replace(/[+-]\d{2}:\d{2}$/, '');
+        // First, strip any existing timezone information
+        decodedDatetime = decodedDatetime.replace(/([T\s]\d{2}:\d{2}(:\d{2})?)([+-]\d{2}:\d{2})?.*$/, '$1');
         
-        // Verify format
-        if (!decodedDatetime.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/)) {
+        // Make sure datetime is in correct format YYYY-MM-DDTHH:MM:SS
+        if (!decodedDatetime.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)) {
           return {
             status: 400,
             headers: corsHeaders,
             body: { 
               error: 'Invalid datetime format',
-              message: 'Datetime must be in format: YYYY-MM-DD HH:MM:SS',
+              message: 'Datetime must be in format: YYYY-MM-DDTHH:MM:SS',
               provided: decodedDatetime
             }
           };
         }
         
-        // Ensure seconds
+        // Ensure datetime has seconds part
         if (!decodedDatetime.match(/:\d{2}$/)) {
           decodedDatetime += ':00';
         }
+        
+        // CRITICAL FIX: Add timezone information required by Prokerala API
+        // Add +05:30 for India Standard Time as required by Prokerala
+        decodedDatetime += '+05:30';
       }
     } catch (datetimeError) {
       console.error('Error processing datetime parameter:', datetimeError);
