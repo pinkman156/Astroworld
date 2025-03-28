@@ -389,80 +389,13 @@ class ApiService {
       const isoDateTime = formattedDateTime.replace(' ', 'T') + '+05:30';
       
       // Get the birth chart data using our helper method with explicit chart parameters
-      const rasiChartResponse = await this.makeProkeralaRequest('chart', {
+      const chartResponse = await this.makeProkeralaRequest('chart', {
         datetime: isoDateTime,
         coordinates,
         ayanamsa: 1, // Lahiri ayanamsa
-        chart_type: "rasi", // Main birth chart
-        chart_style: 'north-indian',
-        format: 'json' // Request JSON data instead of SVG
+        chart_type: "rasi", // Use a simple string instead of JSON object
+        chart_style: 'north-indian'
       });
-      
-      // Get additional astrological data in parallel
-      console.log('Fetching additional astrological data for enhanced insight...');
-      
-      let planetPositionData = {};
-      let kundliData = {};
-      let navamsaChartData = {};
-      let bhavaChartData = {};
-      
-      try {
-        const [planetPositionResponse, kundliResponse, navamsaResponse, bhavaResponse] = await Promise.all([
-          // Get planet positions
-          this.makeProkeralaRequest('planet-position', {
-            datetime: formattedDateTime, // Standard format for this endpoint
-            coordinates,
-            ayanamsa: 1
-          }),
-          
-          // Get kundli
-          this.makeProkeralaRequest('kundli', {
-            datetime: formattedDateTime, // Standard format for this endpoint
-            coordinates,
-            ayanamsa: 1
-          }),
-          
-          // Get Navamsa chart (9th division chart - important for marriage and dharma)
-          this.makeProkeralaRequest('chart', {
-            datetime: isoDateTime, 
-            coordinates,
-            ayanamsa: 1,
-            chart_type: "navamsa",
-            chart_style: 'north-indian',
-            format: 'json'
-          }),
-          
-          // Get Bhava chart (house-based chart)
-          this.makeProkeralaRequest('chart', {
-            datetime: isoDateTime, 
-            coordinates,
-            ayanamsa: 1,
-            chart_type: "bhava",
-            chart_style: 'north-indian',
-            format: 'json'
-          })
-        ]);
-        
-        planetPositionData = planetPositionResponse.data;
-        kundliData = kundliResponse.data;
-        navamsaChartData = navamsaResponse.data;
-        bhavaChartData = bhavaResponse.data;
-        
-        console.log('Successfully retrieved all astrological data');
-      } catch (dataError: any) {
-        // Log error but continue with available data
-        console.warn('Error retrieving some astrological data:', dataError.message);
-        console.log('Continuing with partial data for analysis');
-      }
-      
-      // Extract astrological features for better analysis
-      const astrologicalData = {
-        rasiChart: rasiChartResponse.data,
-        navamsaChart: navamsaChartData,
-        bhavaChart: bhavaChartData,
-        planetPositions: planetPositionData,
-        kundli: kundliData
-      };
       
       // Create the insight using Together AI
       const insightResponse = await this.client.post('/api/together/chat', {
@@ -470,34 +403,15 @@ class ApiService {
         messages: [
           {
             role: "system",
-            content: "You are an expert Vedic astrologer with deep knowledge of planetary positions, houses, yogas, dashas, and nakshatras. Analyze the comprehensive birth chart data and provide a detailed, personalized astrological reading. Focus on major life themes, strengths, challenges, and potential periods of significance based on dashas and transits. Compare information across different chart types to provide a well-rounded analysis."
+            content: "You are an expert Vedic astrologer. Analyze the birth chart data and provide a comprehensive astrological reading."
           },
           {
             role: "user",
-            content: `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}.
-
-The data includes multiple chart types and detailed information:
-1. Rasi Chart (main birth chart) - Shows primary planetary positions and aspects
-2. Navamsa Chart (9th division) - Reveals details about marriage, dharma, and spiritual growth
-3. Bhava Chart (house-based) - Provides insights on specific areas of life
-4. Detailed planet positions with degrees, signs, and nakshatras
-5. Kundli data with additional calculations
-
-Key points to analyze:
-- The ascendant/lagna and its significance
-- Compare planetary positions across different chart types
-- Important house placements (especially 1st, 4th, 7th, 10th houses)
-- Yogas (planetary combinations) present in the charts
-- Current and upcoming dasha periods and their implications
-- Look for strengths in the Rasi chart and how they manifest in the divisional charts
-- Areas of life most affected by the current planetary positions
-- Overall strengths and potential challenges 
-
-Here is the complete astrological data: ${JSON.stringify(astrologicalData)}`
+            content: `Generate an astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Here is the birth chart data: ${JSON.stringify(chartResponse.data)}`
           }
         ],
         temperature: 0.7,
-        max_tokens: 1200 // Increased token limit for more detailed analysis
+        max_tokens: 1000
       });
       
       // Extract the insight from the response
@@ -507,18 +421,7 @@ Here is the complete astrological data: ${JSON.stringify(astrologicalData)}`
       const response: ApiResponse = {
         success: true,
         data: {
-          insight,
-          // Include a summary of the astrological data used for reference
-          sourceSummary: {
-            charts: {
-              rasi: true,
-              navamsa: Object.keys(navamsaChartData).length > 0,
-              bhava: Object.keys(bhavaChartData).length > 0
-            },
-            hasKundliData: Object.keys(kundliData).length > 0,
-            hasPlanetPositions: Object.keys(planetPositionData).length > 0,
-            dataVersion: '1.2' // Increased version for multiple chart types
-          }
+          insight
         }
       };
       
@@ -598,45 +501,24 @@ Here is the complete astrological data: ${JSON.stringify(astrologicalData)}`
         // Get planet positions
         this.makeProkeralaRequest('planet-position', {
           datetime: formattedDateTime, // Standard format for this endpoint
-          coordinates,
+          coordinates: coordinates,
           ayanamsa: 1
         }),
         
         // Get birth chart
         this.makeProkeralaRequest('chart', {
           datetime: isoDateTime, // ISO format for chart endpoint
-          coordinates,
+          coordinates: coordinates,
           ayanamsa: 1,
           chart_type: "rasi", // Use a simple string instead of JSON object
-          chart_style: 'north-indian',
-          format: 'json' // Request JSON data instead of SVG
+          chart_style: 'north-indian'
         }),
         
         // Get kundli
         this.makeProkeralaRequest('kundli', {
           datetime: formattedDateTime, // Standard format for this endpoint
-          coordinates,
+          coordinates: coordinates,
           ayanamsa: 1
-        }),
-        
-        // Get Navamsa chart (9th division chart - important for marriage and dharma)
-        this.makeProkeralaRequest('chart', {
-          datetime: isoDateTime, 
-          coordinates,
-          ayanamsa: 1,
-          chart_type: "navamsa",
-          chart_style: 'north-indian',
-          format: 'json'
-        }),
-        
-        // Get Bhava chart (house-based chart)
-        this.makeProkeralaRequest('chart', {
-          datetime: isoDateTime, 
-          coordinates,
-          ayanamsa: 1,
-          chart_type: "bhava",
-          chart_style: 'north-indian',
-          format: 'json'
         })
       ]);
       
