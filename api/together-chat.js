@@ -100,7 +100,7 @@ export default async function handler(req, res) {
       model: req.body.model,
       messages: req.body.messages,
       temperature: req.body.temperature || 0.7,
-      max_tokens: Math.min(req.body.max_tokens || 1000000, 1000000), // Cap at 1000000 tokens for comprehensive responses
+      max_tokens: Math.min(req.body.max_tokens || 10000, 10000), // Cap at 10000 tokens to respect model context limits
     };
     
     // Log request (without sensitive data)

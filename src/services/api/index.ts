@@ -341,7 +341,7 @@ class ApiService {
           }
         ],
         temperature: 0.7,
-        max_tokens: 1000000 // Use high max_tokens value to avoid truncation
+        max_tokens: 10000 // Use reasonable max_tokens value to respect model context limits
       });
       
       // Extract the insight from the response
@@ -370,7 +370,7 @@ class ApiService {
               }
             ],
             temperature: 0.7,
-            max_tokens: 1000000
+            max_tokens: 10000 // Use reasonable max_tokens value
           });
           
           return retryResponse.data.choices[0].message.content;

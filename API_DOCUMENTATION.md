@@ -67,9 +67,10 @@ The application uses an API service class located at `src/services/api/index.ts`
 When making requests to the Together AI API for complex astrological analysis, follow these best practices:
 
 #### Token Limit Optimization
-- The default `max_tokens` limit is set to 1,000,000 to avoid truncated responses for complex astrological analyses
+- The default `max_tokens` limit is set to 10,000 to prevent errors with the model's context length limits
 - You can specify a lower limit for simpler queries if needed
 - Example: `{ max_tokens: 500 }` for basic zodiac descriptions
+- Note: The Mixtral-8x7B-Instruct-v0.1 model has a maximum context length of 32,768 tokens total (including both input and output)
 
 #### Timeout Handling
 - The API server has a 30-second timeout for complex queries (note: Together AI's servers still have an 8-second timeout)
