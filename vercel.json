@@ -25,6 +25,13 @@
       }
     },
     {
+      "src": "api/test.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 10
+      }
+    },
+    {
       "src": "api/**/*.js",
       "use": "@vercel/node",
       "config": {
@@ -39,6 +46,7 @@
     { "source": "/api/together/chat", "destination": "/api/together-chat.js" },
     { "source": "/api/together/chat/:path*", "destination": "/api/together-chat.js" },
     { "source": "/api/together/health", "destination": "/api/together-chat.js" },
+    { "source": "/api/diagnostic", "destination": "/api/test.js" },
     { "source": "/(.*)", "destination": "/$1" }
   ],
   "env": {

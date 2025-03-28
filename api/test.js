@@ -80,3 +80,46 @@ async function runTest() {
 runTest().catch(error => {
   console.error('Test error:', error);
 });
+
+// Simple diagnostic test script for API endpoints
+
+// CORS headers for all responses
+const corsHeaders = {
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+  'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+};
+
+// Main handler function with basic diagnostics
+export default async function handler(req, res) {
+  try {
+    // Return diagnostic information
+    return res.status(200).set(corsHeaders).json({
+      status: 'ok',
+      message: 'Diagnostic endpoint is operational',
+      request: {
+        method: req.method,
+        url: req.url,
+        path: req.path,
+        query: req.query,
+        headers: req.headers,
+        body: req.method === 'POST' ? req.body : undefined
+      },
+      environment: {
+        node_env: process.env.NODE_ENV,
+        vercel_env: process.env.VERCEL_ENV,
+        together_api_key_available: !!process.env.TOGETHER_API_KEY,
+        vite_together_api_key_available: !!process.env.VITE_TOGETHER_API_KEY
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Diagnostic error:', error);
+    return res.status(500).set(corsHeaders).json({
+      status: 'error',
+      message: error.message,
+      stack: error.stack
+    });
+  }
+}
