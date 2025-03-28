@@ -9,6 +9,22 @@
       }
     },
     {
+      "src": "api/together-chat.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 20,
+        "memory": 1024
+      }
+    },
+    {
+      "src": "api/prokerala-proxy.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 25,
+        "memory": 1024
+      }
+    },
+    {
       "src": "api/**/*.js",
       "use": "@vercel/node",
       "config": {
@@ -16,16 +32,6 @@
       }
     }
   ],
-  "functions": {
-    "api/together-chat.js": {
-      "memory": 1024,
-      "maxDuration": 20
-    },
-    "api/prokerala-proxy.js": {
-      "memory": 1024,
-      "maxDuration": 25
-    }
-  },
   "rewrites": [
     { "source": "/api/prokerala-proxy", "destination": "/api/prokerala-proxy.js" },
     { "source": "/api/prokerala-proxy/:path*", "destination": "/api/prokerala-proxy.js" },
