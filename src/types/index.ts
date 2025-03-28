@@ -60,6 +60,25 @@ export interface ApiResponse {
      * The formatted astrological reading
      */
     insight: string;
+    
+    /**
+     * Summary of data sources used for the reading
+     */
+    sourceSummary?: {
+      /**
+       * Types of charts included in the analysis
+       */
+      charts?: {
+        rasi: boolean;
+        navamsa: boolean;
+        bhava: boolean;
+        [key: string]: boolean;
+      };
+      chartType?: string; // For backward compatibility
+      hasKundliData: boolean;
+      hasPlanetPositions: boolean;
+      dataVersion: string;
+    };
   };
   
   /**
