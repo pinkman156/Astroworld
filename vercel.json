@@ -37,6 +37,8 @@
     { "source": "/api/prokerala-proxy/:path*", "destination": "/api/prokerala-proxy.js" },
     { "source": "/api/geocode", "destination": "/api/geocode.js" },
     { "source": "/api/together/chat", "destination": "/api/together-chat.js" },
+    { "source": "/api/together/chat/:path*", "destination": "/api/together-chat.js" },
+    { "source": "/api/together/health", "destination": "/api/together-chat.js" },
     { "source": "/(.*)", "destination": "/$1" }
   ],
   "env": {

@@ -44,8 +44,12 @@ export default async function handler(req, res) {
     return handleOptions(req, res);
   }
   
-  // Handle health check
-  if (req.url.includes('/health') || req.url.includes('/ping')) {
+  // Handle health check - check path in multiple ways for reliability
+  if (req.url.includes('/health') || 
+      req.url.includes('/ping') || 
+      (req.url.includes('/together') && req.url.includes('/health')) ||
+      req.query.health === 'true') {
+    log('Health check requested');
     return handleHealthCheck(req, res);
   }
   
