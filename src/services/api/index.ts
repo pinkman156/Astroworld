@@ -333,7 +333,7 @@ class ApiService {
   /**
    * Get AI-generated insight with a specific prompt
    */
-  async getAIInsight(prompt: string, systemPrompt: string = "You are an expert Vedic astrologer."): Promise<string> {
+  async getAIInsight(prompt: string, systemPrompt: string = "You are an expert Vedic astrologer.", insightType: string = "general"): Promise<string> {
     try {
       const insightResponse = await this.client.post('/api/together/chat', {
         model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
@@ -352,7 +352,84 @@ class ApiService {
       });
       
       // Extract the insight from the response
-      return insightResponse.data.choices[0].message.content;
+      const responseContent = insightResponse.data.choices[0].message.content;
+      
+      // Check if response seems truncated (fewer than 50 tokens or less than 200 characters)
+      const tokenCount = insightResponse.data.usage.completion_tokens;
+      const isResponseTruncated = tokenCount < 50 || responseContent.length < 200;
+      
+      if (isResponseTruncated) {
+        console.warn(`Response appears truncated (${tokenCount} tokens). Retrying with modified prompt.`);
+        
+        // For career insights specifically, try a different approach if it's truncated
+        if (insightType === "career") {
+          console.log("Retrying with alternative career prompt formulation");
+          
+          // Different formulation of the career question
+          const careerPromptParts = prompt.split("Here is the birth chart data:");
+          const chartData = careerPromptParts[1];
+          const nameAndBirth = prompt.match(/for\s+([^.]+)\s+born\s+on\s+([^.]+)\s+at\s+([^.]+)\s+in\s+([^.]+)/);
+          
+          let alternativePrompt = "";
+          if (nameAndBirth) {
+            const [_, name, date, time, place] = nameAndBirth;
+            alternativePrompt = `Based on the natal chart of ${name} (DOB: ${date}, Time: ${time}, Place: ${place}), what are 3-5 career fields that would be most suitable? What professional strengths does this person likely possess? Here is the birth chart data: ${chartData}`;
+          } else {
+            // Fallback if regex doesn't match
+            alternativePrompt = `Based on this birth chart, list 3-5 suitable career paths and key professional strengths. ${chartData}`;
+          }
+          
+          try {
+            const retryResponse = await this.client.post('/api/together/chat', {
+              model: "mistralai/Mixtral-8x7B-Instruct-v0.1", 
+              messages: [
+                {
+                  role: "system",
+                  content: "You are an expert astrologer specializing in career guidance based on birth charts."
+                },
+                {
+                  role: "user",
+                  content: alternativePrompt
+                }
+              ],
+              temperature: 0.7,
+              max_tokens: 10000
+            });
+            
+            return retryResponse.data.choices[0].message.content;
+          } catch (specificRetryError: any) {
+            console.error("Career-specific retry also failed:", specificRetryError.message);
+          }
+        }
+        
+        // General retry for truncated responses with a simpler approach
+        const simplifiedPrompt = `${prompt.split('.')[0]}. Keep response very concise and focused.`;
+        
+        try {
+          const retryResponse = await this.client.post('/api/together/chat', {
+            model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: simplifiedPrompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 10000 // Use reasonable max_tokens value
+          });
+          
+          return retryResponse.data.choices[0].message.content;
+        } catch (retryError: any) {
+          console.error("Simplified retry also failed:", retryError.message);
+          throw new Error(`Failed to generate insight: ${retryError.message}`);
+        }
+      }
+      
+      return responseContent;
     } catch (error: any) {
       console.error('Error generating AI insight:', error);
       
@@ -516,21 +593,21 @@ class ApiService {
         // Process requests sequentially with delays between each
         // Get personality traits
         const personalityPrompt = `Generate a personality reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on personality traits, strengths, and challenges. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const personalityInsight = await this.getAIInsight(personalityPrompt);
+        const personalityInsight = await this.getAIInsight(personalityPrompt, "You are an expert Vedic astrologer.", "personality");
         
         // Add delay between requests
         await this.delay(1000);
         
-        // Get career insights
+        // Get career insights - use different formulation for career specifically
         const careerPrompt = `Generate a career reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on career prospects, professional strengths, and potential career paths. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const careerInsight = await this.getAIInsight(careerPrompt);
+        const careerInsight = await this.getAIInsight(careerPrompt, "You are an expert Vedic astrologer specializing in career guidance based on birth charts.", "career");
         
         // Add delay between requests
         await this.delay(1000);
         
         // Get relationship insights
         const relationshipPrompt = `Generate a relationship reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on relationship patterns, compatibility, and advice for relationships. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const relationshipInsight = await this.getAIInsight(relationshipPrompt);
+        const relationshipInsight = await this.getAIInsight(relationshipPrompt, "You are an expert Vedic astrologer specializing in relationship analysis.", "relationship");
         
         // Combine insights with headings
         const combinedInsight = `

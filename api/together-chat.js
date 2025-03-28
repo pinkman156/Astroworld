@@ -119,6 +119,93 @@ export default async function handler(req, res) {
         timeout: 15000 // 15 second timeout to stay within Vercel's function limits
       });
       
+      // Check for potential truncated responses
+      const responseContent = response.data.choices[0]?.message?.content || '';
+      const tokenCount = response.data.usage?.completion_tokens || 0;
+      
+      // If response seems truncated (tiny response with "stop" reason)
+      if (tokenCount < 50 && responseContent.length < 200 && response.data.choices[0].finish_reason === 'stop') {
+        console.warn(`Possible truncated response detected: ${tokenCount} tokens, finish_reason: ${response.data.choices[0].finish_reason}`);
+        
+        // Check if this is a career-related query
+        const isCareerQuery = requestData.messages.some(msg => 
+          msg.role === 'user' && 
+          (msg.content.includes('career') || 
+           msg.content.includes('profession') || 
+           msg.content.includes('job') ||
+           msg.content.includes('occupation'))
+        );
+        
+        if (isCareerQuery) {
+          console.log('Career query detected with truncated response. Applying special handling.');
+          
+          // Create a modified version of the query
+          const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
+          
+          // Extract name and birth details using regex if possible
+          const detailsMatch = userMessage.match(/for\s+([^.]+)\s+born\s+on\s+([^.]+)\s+at\s+([^.]+)\s+in\s+([^.]+)/);
+          let modifiedPrompt = '';
+          
+          if (detailsMatch) {
+            // If we can extract structured information
+            const [_, name, date, time, place] = detailsMatch;
+            
+            // Create a more direct prompt focused on listing career options
+            modifiedPrompt = `Based on the natal chart for ${name} (DOB: ${date}, Time: ${time}, Location: ${place}), please list exactly 5 suitable career fields and 3 professional strengths. Format as bullet points.`;
+            
+            // Extract chart data if available
+            const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
+            if (chartDataMatch && chartDataMatch[1]) {
+              modifiedPrompt += ` Chart data: ${chartDataMatch[1]}`;
+            }
+          } else {
+            // Fallback to a simpler transformation
+            modifiedPrompt = userMessage.replace(/Generate a career reading/i, 'List exactly 5 suitable career options as bullet points. Keep it simple and direct.')
+                                    .replace(/Focus ONLY on.+?\./, 'Focus only on listing career options.');
+          }
+          
+          // Create modified request with specialized system prompt
+          const modifiedRequest = {
+            ...requestData,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an expert astrologer who specializes in career guidance. Keep responses direct and structured, always using bullet points. Be brief but clear.'
+              },
+              {
+                role: 'user',
+                content: modifiedPrompt
+              }
+            ],
+            max_tokens: 2000 // Use a smaller token limit for more reliability
+          };
+          
+          try {
+            console.log('Retrying with modified career query');
+            
+            // Make the modified request
+            const retryResponse = await axios({
+              method: 'POST',
+              url: 'https://api.together.xyz/v1/chat/completions',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+              },
+              data: modifiedRequest,
+              timeout: 10000 // Shorter timeout for retry
+            });
+            
+            console.log('Modified career query successful');
+            
+            // Return the retry response
+            return res.status(200).json(retryResponse.data);
+          } catch (specialRetryError) {
+            console.error('Special career retry also failed:', specialRetryError.message);
+            // Continue to normal response or fall through to other retry mechanisms
+          }
+        }
+      }
+      
       // Log success and timing
       const duration = Date.now() - startTime;
       console.log(`API request successful (${duration}ms)`);
