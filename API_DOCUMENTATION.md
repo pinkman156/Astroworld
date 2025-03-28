@@ -22,7 +22,8 @@ The Astroworld API provides astrological insights and birth chart analysis throu
 - **GET /api/prokerala-proxy/planet-position**: Retrieves planetary positions
 - **GET /api/prokerala-proxy/kundli**: Generates Vedic astrology birth chart
 - **GET /api/prokerala-proxy/chart**: Retrieves comprehensive chart data
-- **POST /api/together/chat**: AI-powered astrological insight generation
+- **POST /api/together/chat**: AI-powered astrological insight generation (via Claude API)
+- **POST /api/claude/chat**: Alternative endpoint for Claude AI-powered insights
 
 ## Environment Setup
 
@@ -38,8 +39,11 @@ VITE_API_BASE_URL=http://localhost:5176  # For local development
 VITE_PROKERALA_CLIENT_ID=your_client_id
 VITE_PROKERALA_CLIENT_SECRET=your_client_secret
 
-# Together AI API Key
+# Together AI API Key (Not required when using Claude AI)
 VITE_TOGETHER_API_KEY=your_api_key
+
+# Claude AI API Key
+VITE_CLAUDE_API_KEY=your_claude_api_key
 ```
 
 ### Local Development Setup
@@ -62,15 +66,17 @@ The application uses an API service class located at `src/services/api/index.ts`
 - Managing API authentication
 - Handling errors
 
-### Optimizing Together AI Requests
+### Optimizing AI Requests
 
-When making requests to the Together AI API for complex astrological analysis, follow these best practices:
+When making requests to the AI API for complex astrological analysis, follow these best practices:
 
 #### Token Limit Optimization
-- The default `max_tokens` limit is set to 10,000 to prevent errors with the model's context length limits
+- For Claude API, the default `max_tokens` limit is set to 4,096
+- For Together AI, the default `max_tokens` limit is set to 10,000
 - You can specify a lower limit for simpler queries if needed
 - Example: `{ max_tokens: 500 }` for basic zodiac descriptions
-- Note: The Mixtral-8x7B-Instruct-v0.1 model has a maximum context length of 32,768 tokens total (including both input and output)
+- Note: Claude 3.5 Sonnet has a 200,000 token context window
+- Note: Mixtral-8x7B-Instruct-v0.1 model has a context window of 32,768 tokens
 
 #### Timeout Handling
 - The API server has a 30-second timeout for complex queries (note: Together AI's servers still have an 8-second timeout)
