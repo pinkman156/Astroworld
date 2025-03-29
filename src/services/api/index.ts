@@ -796,7 +796,7 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
         console.log('Making a single comprehensive astrological analysis request');
         
         // Create a prompt that requests all the information needed in a structured format
-        const comprehensivePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} IST in ${birthData.place}.
+        const comprehensivePrePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} IST in ${birthData.place}.
 
 ${summarizedChartData.planetPositions ? 'Planet Positions:\n' + summarizedChartData.planetPositions : 'Birth chart details:\n' + JSON.stringify(summarizedChartData)}
 
@@ -813,6 +813,9 @@ Potential Challenges: 5 potential difficulties or growth areas
 Significant Chart Features: 5 notable planetary configurations or yogas
 
 For lists, use numbered format (1., 2., 3.). Keep points concise but meaningful. Focus on concrete insights rather than general statements.`;
+
+        const comprehensivePrompt = this.cleanAstrologyPrompt(comprehensivePrePrompt);
+        console.log('Comprehensive prompt:', comprehensivePrompt);
 
         // Make single request with appropriate system prompt
         const comprehensiveInsight = await this.retryWithExponentialBackoff(

@@ -353,8 +353,15 @@ export default async function handler(req, res) {
       }
       
       // Prepare a clean, optimized prompt for the astrological reading
-      const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} born on ${birthDate} at ${birthTime} IST in ${birthPlace}.   ${chartInfo ? `Planet Positions:   ${chartInfo}` : ''}   Include the following sections:   Birth Details: Date, Time, Place, Name   Birth Chart Overview: Brief overview with Sun, Moon, and Ascendant/Lagna signs   Ascendant/Lagna: Rising sign qualities and influence   Personality Overview: Analysis of personality traits   Career Insights: 3 specific insights about career   Relationship Patterns: 3 insights about relationships   Key Strengths: 5 primary strengths   Potential Challenges: 5 potential difficulties   Significant Chart Features: 5 notable configurations   For lists, use numbered format (1., 2., 3.). Keep points concise but meaningful.`;
+      const prePrompt = `Generate a comprehensive astrological reading for ${name} born on ${birthDate} at ${birthTime} IST in ${birthPlace}.   ${chartInfo ? `Planet Positions:   ${chartInfo}` : ''}   Include the following sections:   Birth Details: Date, Time, Place, Name   Birth Chart Overview: Brief overview with Sun, Moon, and Ascendant/Lagna signs   Ascendant/Lagna: Rising sign qualities and influence   Personality Overview: Analysis of personality traits   Career Insights: 3 specific insights about career   Relationship Patterns: 3 insights about relationships   Key Strengths: 5 primary strengths   Potential Challenges: 5 potential difficulties   Significant Chart Features: 5 notable configurations   For lists, use numbered format (1., 2., 3.). Keep points concise but meaningful.`;
       
+      const optimizedPrompt = prePrompt.replace(/\d+\.\d+°/g, '')
+        .replace(/(\d+\.\d+)\s*degrees/gi, '')
+        .replace(/(\w+)\s+is\s+in\s+(\w+)\s+at\s+\d+\.\d+°/gi, '$1 is in $2')
+        .replace(/(\w+):\s+(\w+)\s+at\s+\d+\.\d+°/gi, '$1: $2')
+        .trim();
+
+      console.log('Optimized prompt:', optimizedPrompt);
       const systemPrompt = "You are an expert Vedic astrologer providing concise readings.";
       
       // Update the request data with optimized prompts
