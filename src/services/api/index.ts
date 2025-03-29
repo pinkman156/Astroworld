@@ -432,7 +432,7 @@ class ApiService {
   /**
    * Get AI-generated insight with a specific prompt
    */
-  async getAIInsight(prompt: string, systemPrompt: string = "You are an expert Vedic astrologer.", insightType: string = "general"): Promise<string> {
+  async getAIInsight(prompt: string, systemPrompt: string = "You are an expert Vedic astrologer. IMPORTANT INSTRUCTION: Always provide a complete response without truncation. Cover all requested sections thoroughly. Start with the most important information. Format each section with ## headers and numbered lists (1., 2., 3.) for clarity. Never end a response mid-sentence or before completing all requested sections.", insightType: string = "general"): Promise<string> {
     try {
       // First, check if we have a cached response for this prompt
       const cacheKey = `insight_${insightType}_${prompt.substring(0, 50).replace(/\s+/g, '_').toLowerCase()}`;
@@ -1009,7 +1009,7 @@ Keep points concise but substantive. Focus on concrete insights rather than gene
                   messages: [
                     {
                       role: "system",
-                      content: "You are an expert Vedic astrologer providing concise readings."
+                      content: "You are an expert Vedic astrologer providing concise readings. IMPORTANT INSTRUCTION: Always provide a complete response without truncation. Cover all requested sections thoroughly. Start with the most important information. Format each section with ## headers and numbered lists (1., 2., 3.) for clarity. Never end a response mid-sentence or before completing all requested sections."
                     },
                     {
                       role: "user",
