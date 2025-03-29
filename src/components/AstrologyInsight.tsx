@@ -611,19 +611,29 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                     
                     // Log the raw text for debugging
                     console.log('Parsing text:', text);
+                    
+                    // Check if the text contains separate points on different lines
+                    // This handles cases where we have multiple paragraphs with a clear line break between them
+                    if (/\n\s*\n/.test(text)) {
+                      return text.split(/\n\s*\n/)
+                        .map(item => item.trim())
+                        .filter(item => item.length > 0);
+                    }
+                    
+                    // Check for points that are simply separated by newlines (without an empty line between them)
+                    const lines = text.split(/\n/).map(line => line.trim()).filter(line => line.length > 0);
+                    if (lines.length > 1) {
+                      return lines.map(line => line.replace(/^\d+\.\s*/, '').trim());
+                    }
 
                     // First check if text contains numbered points all in one line (e.g. "1. Point 1. 2. Point 2")
                     if (/\d+\.\s+.+?\d+\.\s+/.test(text)) {
-                      // Split by numbered points pattern
-                      const points = [];
-                      let remaining = text;
-                      
                       // Extract each numbered point
-                      const numPointRegex = /(\d+\.\s+[^.0-9]+?)(?=\s+\d+\.|$)/g;
-                      const matches = Array.from(remaining.matchAll(numPointRegex));
+                      const numPointRegex = /\d+\.\s+([^.0-9]+?)(?=\s+\d+\.|$)/g;
+                      const matches = Array.from(text.matchAll(numPointRegex));
                       
                       if (matches && matches.length > 0) {
-                        return matches.map(match => match[1].trim().replace(/^\d+\.\s*/, ''));
+                        return matches.map(match => match[1].trim());
                       }
                       
                       // Fallback: Split by digit-period-space pattern
@@ -646,17 +656,6 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                     const simpleNumbered = text.split(/\\n/).map(line => line.trim()).filter(line => /^\d+\./.test(line));
                     if (simpleNumbered.length > 0) {
                       return simpleNumbered.map(line => line.replace(/^\d+\.\s*/, '').trim());
-                    }
-                    
-                    // Try to find items with line breaks between them
-                    const lines = text.split(/\\n+/).map(line => line.trim()).filter(line => line.length > 0);
-                    if (lines.length > 1) {
-                      // Clean up each line
-                      return lines.map(line => 
-                        line.replace(/^\\s*[-•*]\\s*/, '') // Remove bullet symbols
-                            .replace(/^\\s*\\d+\\.?\\s*/, '') // Remove numbers
-                            .trim()
-                      );
                     }
                     
                     // If no numbered list found or multiple lines, split by common bullet markers
@@ -728,9 +727,28 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                     return null;
                   }
                   
+                  // Handle the case where there might be multi-line points - separate them into individual points
+                  const processMultiLines = (points: string[]): string[] => {
+                    let result: string[] = [];
+                    
+                    points.forEach(point => {
+                      // If there are multiple lines, split them into separate points
+                      if (point.includes('\n')) {
+                        const lines = point.split('\n')
+                          .map(line => line.trim())
+                          .filter(line => line.length > 0);
+                        result = [...result, ...lines];
+                      } else {
+                        result.push(point);
+                      }
+                    });
+                    
+                    return result;
+                  };
+                  
                   // Use all career and relationship points without limitation
                   const finalCareerPoints = careerPoints.length > 0 
-                    ? careerPoints
+                    ? processMultiLines(careerPoints)
                     : [
                         "10th house in Sagittarius suggests a career path requiring knowledge, travel, or teaching",
                         "Jupiter's placement indicates success in fields related to communication or publishing",
@@ -738,7 +756,7 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                       ];
                   
                   const finalRelationshipPoints = relationshipPoints.length > 0 
-                    ? relationshipPoints
+                    ? processMultiLines(relationshipPoints)
                     : [
                         "Venus in the 7th house indicates an attractive partner with artistic sensibilities",
                         "Mars square Venus suggests passionate relationships with occasional conflicts",
@@ -816,8 +834,20 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                       fontSize: '0.95rem',
                                     }}
                                   >
-                                    {/* Render with proper styling if it contains a colon */}
-                                    {point.includes(':') ? (
+                                    {/* Check if the point has multiple lines or points within it */}
+                                    {(/\\n|\\r\\n/).test(point) || point.includes('\n') ? (
+                                      // Render each line as a separate paragraph
+                                      <>
+                                        {point.split(/\\n|\\r\\n|\n/).filter(line => line.trim()).map((line, idx) => (
+                                          <p key={idx} style={{ 
+                                            marginBottom: idx < point.split(/\\n|\\r\\n|\n/).filter(l => l.trim()).length - 1 ? '8px' : '0',
+                                            display: 'block'
+                                          }}>
+                                            {line.trim().replace(/^[.•*-\d.]+\s*/g, '')}
+                                          </p>
+                                        ))}
+                                      </>
+                                    ) : point.includes(':') ? (
                                       <>
                                         <span style={{ 
                                           fontWeight: 700, 
@@ -831,16 +861,9 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                         <span>{': ' + point.split(':').slice(1).join(':').trim()}</span>
                                       </>
                                     ) : (/\d+\./).test(point) ? (
-                                      // Handle case where a point starts with a number followed by period (likely mixed with other points)
-                                      // Split the point by number markers and render each as a separate paragraph
+                                      // Handle case where a point starts with a number followed by period
                                       <>
-                                        {point.split(/\s+\d+\.\s+/).filter(p => p.trim()).map((subPoint, idx) => (
-                                          <p key={idx} style={{ 
-                                            marginBottom: idx < point.split(/\s+\d+\.\s+/).filter(p => p.trim()).length - 1 ? '8px' : '0' 
-                                          }}>
-                                            {subPoint.trim().replace(/^[.•*-]+\s*/g, '')}
-                                          </p>
-                                        ))}
+                                        {point.replace(/^\d+\.\s*/, '').trim()}
                                       </>
                                     ) : point.includes('"') ? (
                                       <>
@@ -905,8 +928,20 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                       fontSize: '0.95rem',
                                     }}
                                   >
-                                    {/* Render with proper styling if it contains a colon */}
-                                    {point.includes(':') ? (
+                                    {/* Check if the point has multiple lines or points within it */}
+                                    {(/\\n|\\r\\n/).test(point) || point.includes('\n') ? (
+                                      // Render each line as a separate paragraph
+                                      <>
+                                        {point.split(/\\n|\\r\\n|\n/).filter(line => line.trim()).map((line, idx) => (
+                                          <p key={idx} style={{ 
+                                            marginBottom: idx < point.split(/\\n|\\r\\n|\n/).filter(l => l.trim()).length - 1 ? '8px' : '0',
+                                            display: 'block'
+                                          }}>
+                                            {line.trim().replace(/^[.•*-\d.]+\s*/g, '')}
+                                          </p>
+                                        ))}
+                                      </>
+                                    ) : point.includes(':') ? (
                                       <>
                                         <span style={{ 
                                           fontWeight: 700, 
@@ -920,16 +955,9 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                         <span>{': ' + point.split(':').slice(1).join(':').trim()}</span>
                                       </>
                                     ) : (/\d+\./).test(point) ? (
-                                      // Handle case where a point starts with a number followed by period (likely mixed with other points)
-                                      // Split the point by number markers and render each as a separate paragraph
+                                      // Handle case where a point starts with a number followed by period
                                       <>
-                                        {point.split(/\s+\d+\.\s+/).filter(p => p.trim()).map((subPoint, idx) => (
-                                          <p key={idx} style={{ 
-                                            marginBottom: idx < point.split(/\s+\d+\.\s+/).filter(p => p.trim()).length - 1 ? '8px' : '0' 
-                                          }}>
-                                            {subPoint.trim().replace(/^[.•*-]+\s*/g, '')}
-                                          </p>
-                                        ))}
+                                        {point.replace(/^\d+\.\s*/, '').trim()}
                                       </>
                                     ) : point.includes('"') ? (
                                       <>
