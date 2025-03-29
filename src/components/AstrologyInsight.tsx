@@ -312,8 +312,17 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                       <Typography variant="overline" sx={{ color: 'rgba(255, 255, 255, 0.75)', fontWeight: 500 }}>
                                         Name
                                       </Typography>
-                                      <Typography variant="body1" fontWeight={500} sx={{ mt: 1, color: 'white' }}>
-                                        {name}
+                                      <Typography 
+                                        variant="body1" 
+                                        sx={{ 
+                                          mt: 1, 
+                                          color: 'white', 
+                                          fontWeight: 500, 
+                                          fontSize: '0.95rem',
+                                          letterSpacing: '0.01em'
+                                        }}
+                                      >
+                                        {name.replace(/[•*-]/g, '').trim()}
                                       </Typography>
                                     </Paper>
                                   </Box>
@@ -336,8 +345,17 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                       <Typography variant="overline" sx={{ color: 'rgba(255, 255, 255, 0.75)', fontWeight: 500 }}>
                                         Date
                                       </Typography>
-                                      <Typography variant="body1" fontWeight={500} sx={{ mt: 1, color: 'white' }}>
-                                        {date}
+                                      <Typography 
+                                        variant="body1" 
+                                        sx={{ 
+                                          mt: 1, 
+                                          color: 'white', 
+                                          fontWeight: 500, 
+                                          fontSize: '0.95rem',
+                                          letterSpacing: '0.01em'
+                                        }}
+                                      >
+                                        {date.replace(/[•*-]/g, '').trim()}
                                       </Typography>
                                     </Paper>
                                   </Box>
@@ -353,8 +371,17 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                       <Typography variant="overline" sx={{ color: 'rgba(255, 255, 255, 0.75)', fontWeight: 500 }}>
                                         Time
                                       </Typography>
-                                      <Typography variant="body1" fontWeight={500} sx={{ mt: 1, color: 'white' }}>
-                                        {time}
+                                      <Typography 
+                                        variant="body1" 
+                                        sx={{ 
+                                          mt: 1, 
+                                          color: 'white', 
+                                          fontWeight: 500, 
+                                          fontSize: '0.95rem',
+                                          letterSpacing: '0.01em'
+                                        }}
+                                      >
+                                        {time.replace(/[•*-]/g, '').trim()}
                                       </Typography>
                                     </Paper>
                                   </Box>
@@ -370,8 +397,17 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                       <Typography variant="overline" sx={{ color: 'rgba(255, 255, 255, 0.75)', fontWeight: 500 }}>
                                         Place
                                       </Typography>
-                                      <Typography variant="body1" fontWeight={500} sx={{ mt: 1, color: 'white' }}>
-                                        {place}
+                                      <Typography 
+                                        variant="body1" 
+                                        sx={{ 
+                                          mt: 1, 
+                                          color: 'white', 
+                                          fontWeight: 500, 
+                                          fontSize: '0.95rem',
+                                          letterSpacing: '0.01em'
+                                        }}
+                                      >
+                                        {place.replace(/[•*-]/g, '').trim()}
                                       </Typography>
                                     </Paper>
                                   </Box>
@@ -467,15 +503,19 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                             </Box>
                             <CardContent sx={{ p: 2, bgcolor: 'rgba(13, 18, 35, 0.8)' }}>
                               <Paper sx={{ p: 2, bgcolor: 'rgba(16, 185, 129, 0.2)' }}>
-                                <Typography sx={{ 
-                                  color: 'rgba(255, 255, 255, 0.9)', 
-                                  fontStyle: 'italic', 
-                                  lineHeight: 1.8,
-                                  fontSize: '1.05rem',
-                                  textAlign: 'center',
-                                  fontWeight: 500
-                                }}>
-                                  {personalityOverview}
+                                <Typography 
+                                  variant="body1"
+                                  sx={{ 
+                                    color: 'rgba(255, 255, 255, 0.9)', 
+                                    fontStyle: 'italic', 
+                                    lineHeight: 1.8,
+                                    fontSize: '1.05rem',
+                                    textAlign: 'center',
+                                    fontWeight: 500,
+                                    letterSpacing: '0.01em'
+                                  }}
+                                >
+                                  {personalityOverview.replace(/[•*-]/g, '').trim().replace(/^[.]+\s*/g, '')}
                                 </Typography>
                               </Paper>
                             </CardContent>
@@ -578,8 +618,16 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                 }}>
                                   {ascendantSign}
                                 </Box>
-                                <Typography sx={{ color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.6 }}>
-                                  {ascendantDescription}
+                                <Typography 
+                                  variant="body1"
+                                  sx={{ 
+                                    color: 'rgba(255, 255, 255, 0.85)', 
+                                    lineHeight: 1.6,
+                                    fontSize: '0.95rem',
+                                    letterSpacing: '0.01em'
+                                  }}
+                                >
+                                  {ascendantDescription.replace(/[•*-]/g, '').trim().replace(/^[.]+\s*/g, '')}
                                 </Typography>
                               </Box>
                             </CardContent>
@@ -1119,22 +1167,40 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                           letterSpacing: '0.01em'
                                         }}
                                       >
-                                        {/* Render with proper styling if it contains a colon */}
+                                        {/* Clean rendering without colons and unnecessary symbols */}
                                         {point.includes(':') ? (
                                           <>
-                                            <span style={{ fontWeight: 700, color: "#10B981", fontSize: "1.05rem", display: "block", marginBottom: "4px" }}>{point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}</span>
-                                            <span>{': ' + point.split(':').slice(1).join(':').trim()}</span>
+                                            <Typography 
+                                              component="div" 
+                                              sx={{ 
+                                                fontWeight: 600, 
+                                                color: "#10B981", 
+                                                fontSize: "1.05rem", 
+                                                marginBottom: "4px"
+                                              }}
+                                            >
+                                              {point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}
+                                            </Typography>
+                                            <Typography component="div">
+                                              {point.split(':').slice(1).join(':').trim()}
+                                            </Typography>
                                           </>
                                         ) : point.includes('"') ? (
                                           <>
-                                            <span style={{ 
-                                              fontWeight: 700, 
-                                              color: '#3B82F6', 
-                                              fontSize: '1.05rem',
-                                              display: 'block',
-                                              marginBottom: '4px'
-                                            }}>{point.split('"')[1].trim()}</span>
-                                            <span>{point.split('"').slice(2).join('"').trim().replace(/^"/g, '')}</span>
+                                            <Typography 
+                                              component="div" 
+                                              sx={{ 
+                                                fontWeight: 600, 
+                                                color: '#3B82F6', 
+                                                fontSize: '1.05rem',
+                                                marginBottom: '4px'
+                                              }}
+                                            >
+                                              {point.split('"')[1].trim()}
+                                            </Typography>
+                                            <Typography component="div">
+                                              {point.split('"').slice(2).join('"').trim().replace(/^"/g, '')}
+                                            </Typography>
                                           </>
                                         ) : (
                                           point.replace(/[•*-]/g, '').trim().replace(/^[.]+\s*/g, '')
@@ -1337,16 +1403,40 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                           letterSpacing: '0.01em'
                                         }}
                                       >
-                                        {/* Render with proper styling if it contains a colon */}
+                                        {/* Clean rendering without colons and unnecessary symbols */}
                                         {point.includes(':') ? (
                                           <>
-                                            <span style={{ fontWeight: 700, color: "#10B981", fontSize: "1.05rem", display: "block", marginBottom: "4px" }}>{point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}</span>
-                                            <span>{': ' + point.split(':').slice(1).join(':').trim()}</span>
+                                            <Typography 
+                                              component="div" 
+                                              sx={{ 
+                                                fontWeight: 600, 
+                                                color: "#10B981", 
+                                                fontSize: "1.05rem", 
+                                                marginBottom: "4px"
+                                              }}
+                                            >
+                                              {point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}
+                                            </Typography>
+                                            <Typography component="div">
+                                              {point.split(':').slice(1).join(':').trim()}
+                                            </Typography>
                                           </>
                                         ) : point.includes('"') ? (
                                           <>
-                                            <span style={{ fontWeight: 700, color: "#10B981", fontSize: "1.05rem", display: "block", marginBottom: "4px" }}>{point.split('"')[1].trim()}</span>
-                                            <span>{' ' + point.split('"').slice(2).join('"').trim().replace(/^"/g, '')}</span>
+                                            <Typography 
+                                              component="div" 
+                                              sx={{ 
+                                                fontWeight: 600, 
+                                                color: "#10B981", 
+                                                fontSize: "1.05rem", 
+                                                marginBottom: "4px"
+                                              }}
+                                            >
+                                              {point.split('"')[1].trim()}
+                                            </Typography>
+                                            <Typography component="div">
+                                              {point.split('"').slice(2).join('"').trim().replace(/^"/g, '')}
+                                            </Typography>
                                           </>
                                         ) : (
                                           point.replace(/[•*-]/g, '').trim().replace(/^[.]+\s*/g, '')
