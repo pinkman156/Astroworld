@@ -403,6 +403,9 @@ class ApiService {
     
     // Remove all other coordinates
     cleanedPrompt = cleanedPrompt
+      // Remove newline characters and HTML tags
+      .replace(/\\n/g, ' ')
+      .replace(/<[^>]*>/g, '')
       .replace(atDegreePattern, '')
       .replace(atDecimalPattern, '')
       .replace(standaloneCoordinatePattern, '')
