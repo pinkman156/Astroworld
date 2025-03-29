@@ -834,8 +834,26 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                       fontSize: '0.95rem',
                                     }}
                                   >
-                                    {/* Check if the point has multiple lines or points within it */}
-                                    {(/\\n|\\r\\n/).test(point) || point.includes('\n') ? (
+                                    {/* Clean rendering without colons and unnecessary symbols */}
+                                    {point.includes(':') ? (
+                                      // Format career/relationship items with title-description format but no colon displayed
+                                      <>
+                                        <Typography 
+                                          component="div" 
+                                          sx={{ 
+                                            fontWeight: 600, 
+                                            color: "#10B981", 
+                                            fontSize: "1.05rem", 
+                                            marginBottom: "4px"
+                                          }}
+                                        >
+                                          {point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}
+                                        </Typography>
+                                        <Typography component="div">
+                                          {point.split(':').slice(1).join(':').trim()}
+                                        </Typography>
+                                      </>
+                                    ) : (/\\n|\\r\\n/).test(point) || point.includes('\n') ? (
                                       // Render each line as a separate paragraph
                                       <>
                                         {point.split(/\\n|\\r\\n|\n/).filter(line => line.trim()).map((line, idx) => (
@@ -847,34 +865,10 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                           </p>
                                         ))}
                                       </>
-                                    ) : point.includes(':') ? (
-                                      <>
-                                        <span style={{ 
-                                          fontWeight: 700, 
-                                          color: "#10B981", 
-                                          fontSize: "1.05rem", 
-                                          display: "block", 
-                                          marginBottom: "4px" 
-                                        }}>
-                                          {point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}
-                                        </span>
-                                        <span>{': ' + point.split(':').slice(1).join(':').trim()}</span>
-                                      </>
                                     ) : (/\d+\./).test(point) ? (
                                       // Handle case where a point starts with a number followed by period
                                       <>
-                                        {point.replace(/^\d+\.\s*/, '').trim()}
-                                      </>
-                                    ) : point.includes('"') ? (
-                                      <>
-                                        <span style={{ 
-                                          fontWeight: 700, 
-                                          color: '#FDA4AF', 
-                                          fontSize: '1.05rem',
-                                          display: 'block',
-                                          marginBottom: '4px'
-                                        }}>{point.split('"')[1].trim()}</span>
-                                        <span>{point.split('"').slice(2).join('"').trim().replace(/^"/g, '')}</span>
+                                        {point.replace(/^\d+\.\s*/, '').trim().replace(/^[.]+\s*/g, '')}
                                       </>
                                     ) : (
                                       point.replace(/[•*-]/g, '').trim().replace(/^[.]+\s*/g, '')
@@ -928,8 +922,26 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                       fontSize: '0.95rem',
                                     }}
                                   >
-                                    {/* Check if the point has multiple lines or points within it */}
-                                    {(/\\n|\\r\\n/).test(point) || point.includes('\n') ? (
+                                    {/* Clean rendering without colons and unnecessary symbols */}
+                                    {point.includes(':') ? (
+                                      // Format career/relationship items with title-description format but no colon displayed
+                                      <>
+                                        <Typography 
+                                          component="div" 
+                                          sx={{ 
+                                            fontWeight: 600, 
+                                            color: "#10B981", 
+                                            fontSize: "1.05rem", 
+                                            marginBottom: "4px"
+                                          }}
+                                        >
+                                          {point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}
+                                        </Typography>
+                                        <Typography component="div">
+                                          {point.split(':').slice(1).join(':').trim()}
+                                        </Typography>
+                                      </>
+                                    ) : (/\\n|\\r\\n/).test(point) || point.includes('\n') ? (
                                       // Render each line as a separate paragraph
                                       <>
                                         {point.split(/\\n|\\r\\n|\n/).filter(line => line.trim()).map((line, idx) => (
@@ -941,34 +953,10 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                           </p>
                                         ))}
                                       </>
-                                    ) : point.includes(':') ? (
-                                      <>
-                                        <span style={{ 
-                                          fontWeight: 700, 
-                                          color: "#10B981", 
-                                          fontSize: "1.05rem", 
-                                          display: "block", 
-                                          marginBottom: "4px" 
-                                        }}>
-                                          {point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}
-                                        </span>
-                                        <span>{': ' + point.split(':').slice(1).join(':').trim()}</span>
-                                      </>
                                     ) : (/\d+\./).test(point) ? (
                                       // Handle case where a point starts with a number followed by period
                                       <>
-                                        {point.replace(/^\d+\.\s*/, '').trim()}
-                                      </>
-                                    ) : point.includes('"') ? (
-                                      <>
-                                        <span style={{ 
-                                          fontWeight: 700, 
-                                          color: '#FDA4AF', 
-                                          fontSize: '1.05rem',
-                                          display: 'block',
-                                          marginBottom: '4px'
-                                        }}>{point.split('"')[1].trim()}</span>
-                                        <span>{point.split('"').slice(2).join('"').trim().replace(/^"/g, '')}</span>
+                                        {point.replace(/^\d+\.\s*/, '').trim().replace(/^[.]+\s*/g, '')}
                                       </>
                                     ) : (
                                       point.replace(/[•*-]/g, '').trim().replace(/^[.]+\s*/g, '')
