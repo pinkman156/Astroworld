@@ -164,50 +164,69 @@ export default async function handler(req, res) {
       
       // Initialize chart info
       let chartInfo = '';
+      let coordinates = "26.4973401,77.9973401"; // Default coordinates
       
-      // Check if we need to fetch planet position data
+      // Log extracted birth details for debugging
+      console.log(`Extracted birth details - Name: ${name}, Date: ${birthDate}, Time: ${birthTime}, Place: ${birthPlace}`);
+      
+      // Step 1: Get coordinates from geocoding if we have a birth place
+      if (birthPlace) {
+        try {
+          console.log(`Geocoding birth place: ${birthPlace}`);
+          const geocodeResponse = await axios({
+            method: 'GET',
+            url: `https://astroworld-delta.vercel.app/api/prokerala-proxy/geocode?q=${encodeURIComponent(birthPlace)}`,
+            timeout: 5000
+          });
+          
+          if (geocodeResponse.data && geocodeResponse.data.latitude && geocodeResponse.data.longitude) {
+            coordinates = `${geocodeResponse.data.latitude},${geocodeResponse.data.longitude}`;
+            console.log(`Successfully geocoded to coordinates: ${coordinates}`);
+          } else {
+            console.log(`Geocoding failed or returned invalid data, using default coordinates`);
+          }
+        } catch (error) {
+          console.error(`Error geocoding birth place: ${error.message}`);
+          // Continue with default coordinates
+        }
+      }
+      
+      // Step 2: Get planet position data directly
       if (birthDate && birthTime) {
         try {
           // Format date and time for API request
-          // Convert to proper format: YYYY-MM-DD+HH:MM:SS
           const formattedDateTime = formatDateTimeForAPI(birthDate, birthTime);
-          
-          // Default coordinates if specific location can't be geocoded
-          // These are approximate coordinates that can be used as fallback
-          const defaultCoordinates = "26.4973401,77.9973401";
-          
-          // In a production app, you would geocode the birthPlace to get coordinates
-          // For simplicity, we're using default coordinates here
-          const coordinates = defaultCoordinates;
+          console.log(`Formatted date/time for API: ${formattedDateTime}`);
           
           // Make request to planet position API
           console.log('Fetching planet position data for chart details');
           const planetPositionResponse = await axios({
             method: 'GET',
             url: `https://astroworld-delta.vercel.app/api/prokerala-proxy/planet-position?datetime=${formattedDateTime}&coordinates=${coordinates}&ayanamsa=1`,
-            timeout: 5000 // 5 second timeout for this request
+            timeout: 5000
           });
           
           // Check if we got a valid response
           if (planetPositionResponse.data && planetPositionResponse.data.planets) {
-            // Extract planet positions from the response
             const planets = planetPositionResponse.data.planets;
+            console.log(`Retrieved planet position data with ${planets.length} planets`);
             
             // Format the planet positions for the chartInfo
             chartInfo = formatPlanetPositions(planets);
-            console.log('Successfully retrieved and formatted planet position data');
+            console.log('Successfully formatted planet position data');
           } else {
             console.warn('Planet position API returned invalid data structure');
-            // Fall back to alternative method for chart details
+            // Try to extract chart info from text as fallback
             chartInfo = extractChartInfoFromText(userMessage);
           }
         } catch (error) {
-          console.error('Error fetching planet position data:', error.message);
-          // Fall back to alternative method for chart details
+          console.error(`Error fetching planet position data: ${error.message}`);
+          // Try to extract chart info from text as fallback
           chartInfo = extractChartInfoFromText(userMessage);
         }
       } else {
-        // If we don't have birth date/time, fall back to original methods
+        console.log('Missing birth date/time, extracting chart info from text');
+        // Try to extract chart info from text if we don't have birth date/time
         chartInfo = extractChartInfoFromText(userMessage);
       }
       
@@ -593,8 +612,11 @@ function formatDateTimeForAPI(birthDate, birthTime) {
 function formatPlanetPositions(planets) {
   try {
     if (!planets || !Array.isArray(planets)) {
+      console.error('Invalid planets data structure');
       return '';
     }
+    
+    console.log(`Formatting ${planets.length} planets`);
     
     // Start building the formatted text
     let formattedText = '';
@@ -610,6 +632,7 @@ function formatPlanetPositions(planets) {
     planets.forEach(planet => {
       if (planet.name === 'Ascendant' || planet.name === 'Lagna') {
         ascendantSign = planet.zodiac || planet.sign || '';
+        console.log(`Found Ascendant/Lagna in ${ascendantSign}`);
       }
       planetSigns[planet.name] = planet.zodiac || planet.sign || '';
     });
@@ -641,72 +664,103 @@ function formatPlanetPositions(planets) {
       }
     });
     
-    // Add any special combinations or yogas if available in the API response
-    if (planets.yogas && planets.yogas.length > 0) {
-      formattedText += `\nKey Yogas: ${planets.yogas.join(', ')}\n`;
-    }
-    
-    // Add Mangal Dosha if available
-    if (planets.mangal_dosha !== undefined) {
-      formattedText += `Mangal Dosha: ${planets.mangal_dosha ? 'Yes' : 'No'}\n`;
-    }
+    // Log the formatted text for debugging
+    console.log(`Formatted planet positions: ${formattedText.substring(0, 100)}...`);
     
     return formattedText.trim();
   } catch (error) {
-    console.error('Error formatting planet positions:', error);
+    console.error(`Error formatting planet positions: ${error.message}`);
     return ''; // Return empty string on error
   }
 }
 
-// Function to extract chart info from text (fallback to original method)
+// Function to extract chart info from text as a fallback method
 function extractChartInfoFromText(userMessage) {
-  // Extract chart details if available in JSON format
-  const chartDataStr = userMessage.includes('birth chart data') ? 
-                      userMessage.match(/birth chart data:?\s*(\{.*\})/s)?.[1] : null;
+  console.log('Attempting to extract chart info from text as fallback');
   
-  // Parse JSON if available and extract key details
-  let chartInfo = '';
-  if (chartDataStr) {
-    try {
-      const chartData = JSON.parse(chartDataStr);
-      const nakshatra = chartData?.kundli?.data?.nakshatra_details?.nakshatra?.name || '';
-      const moonSign = chartData?.kundli?.data?.nakshatra_details?.chandra_rasi?.name || '';
-      const sunSign = chartData?.kundli?.data?.nakshatra_details?.soorya_rasi?.name || '';
-      const additionalInfo = chartData?.kundli?.data?.nakshatra_details?.additional_info || {};
-      const yogas = chartData?.kundli?.data?.yoga_details || [];
-      const mangalDosha = chartData?.kundli?.data?.mangal_dosha?.has_dosha === false ? 'No Mangal Dosha' : 'Has Mangal Dosha';
-      
-      chartInfo = `
-Nakshatra: ${nakshatra}
-Moon Sign: ${moonSign}
-Sun Sign: ${sunSign}
-Deity: ${additionalInfo.deity || ''}
-Birth Stone: ${additionalInfo.birth_stone || ''}
-Best Direction: ${additionalInfo.best_direction || ''}
-Yogas: ${yogas.map(y => y.name + ' - ' + y.description).join(', ').substring(0, 100)}
-${mangalDosha}`.trim();
-    } catch (e) {
-      console.error('Error parsing chart data JSON:', e.message);
-    }
-  } else {
-    // Try to extract chart info from text
-    const nakshatraMatch = userMessage.match(/Nakshatra[:\s-]+([^,.\n]+)/i);
-    const moonSignMatch = userMessage.match(/Moon(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
-    const sunSignMatch = userMessage.match(/Sun(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
-    const ascendantMatch = userMessage.match(/(?:Ascendant|Lagna)[:\s-]+([^,.\n]+)/i);
-    const yogasMatch = userMessage.match(/(?:yoga|yogas)[:\s-]+([^,.\n]+)/i);
-    const mangalMatch = userMessage.match(/Mangal[:\s-]+([^,.\n]+)/i);
-    
-    if (nakshatraMatch || moonSignMatch || sunSignMatch || ascendantMatch) {
-      chartInfo = `
-${nakshatraMatch ? `Nakshatra: ${nakshatraMatch[1].trim()}` : ''}
-${moonSignMatch ? `Moon Sign: ${moonSignMatch[1].trim()}` : ''}
-${sunSignMatch ? `Sun Sign: ${sunSignMatch[1].trim()}` : ''}
-${ascendantMatch ? `Ascendant: ${ascendantMatch[1].trim()}` : ''}
+  // Try to extract chart info directly from text without JSON parsing
+  const nakshatraMatch = userMessage.match(/Nakshatra[:\s-]+([^,.\n]+)/i);
+  const moonSignMatch = userMessage.match(/Moon(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
+  const sunSignMatch = userMessage.match(/Sun(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
+  const ascendantMatch = userMessage.match(/(?:Ascendant|Lagna|Rising)[:\s-]+([^,.\n]+)/i);
+  const yogasMatch = userMessage.match(/(?:yoga|yogas)[:\s-]+([^,.\n]+)/i);
+  const mangalMatch = userMessage.match(/Mangal[:\s-]+([^,.\n]+)/i);
+  
+  if (nakshatraMatch || moonSignMatch || sunSignMatch || ascendantMatch) {
+    let chartInfo = `
+${ascendantMatch ? `Rising Sign/Ascendant: ${ascendantMatch[1].trim()}` : ''}
+${sunSignMatch ? `Sun: ${sunSignMatch[1].trim()}` : ''}
+${moonSignMatch ? `Moon: ${moonSignMatch[1].trim()}` : ''}
+${nakshatraMatch ? `Moon Nakshatra: ${nakshatraMatch[1].trim()}` : ''}
 ${yogasMatch ? `Yogas: ${yogasMatch[1].trim()}` : ''}
 ${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
+    
+    console.log(`Successfully extracted chart info from text: ${chartInfo.substring(0, 100)}...`);
+    return chartInfo;
+  }
+  
+  // If no chart info found in text, check for JSON
+  if (userMessage.includes('birth chart data')) {
+    try {
+      console.log('Found birth chart data in JSON format, extracting and converting to planet positions format');
+      const chartDataMatch = userMessage.match(/birth chart data:?\s*(\{.*\})/s);
+      if (chartDataMatch && chartDataMatch[1]) {
+        const chartData = JSON.parse(chartDataMatch[1]);
+        if (chartData?.kundli?.data) {
+          const data = chartData.kundli.data;
+          
+          // Convert kundli data format to planet positions format
+          let chartInfo = '';
+          
+          // Add rising sign/ascendant if available
+          if (data.ascendant?.sign) {
+            chartInfo += `Rising Sign/Ascendant: ${data.ascendant.sign}\n`;
+          }
+          
+          // Add planets
+          if (data.planets && Array.isArray(data.planets)) {
+            // Important planets to include first
+            const keyPlanets = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
+            
+            keyPlanets.forEach(planetName => {
+              const planet = data.planets.find(p => p.name === planetName);
+              if (planet) {
+                chartInfo += `${planetName}: ${planet.sign}${planet.retrograde ? ' (Retrograde)' : ''}\n`;
+              }
+            });
+          } else {
+            // Alternative way to extract planet info if planets array not available
+            if (data.nakshatra_details?.soorya_rasi?.name) {
+              chartInfo += `Sun: ${data.nakshatra_details.soorya_rasi.name}\n`;
+            }
+            if (data.nakshatra_details?.chandra_rasi?.name) {
+              chartInfo += `Moon: ${data.nakshatra_details.chandra_rasi.name}\n`;
+            }
+            if (data.nakshatra_details?.nakshatra?.name) {
+              chartInfo += `Moon Nakshatra: ${data.nakshatra_details.nakshatra.name}\n`;
+            }
+          }
+          
+          // Add Yogas if available
+          if (data.yoga_details && Array.isArray(data.yoga_details) && data.yoga_details.length > 0) {
+            chartInfo += `Yogas: ${data.yoga_details.map(y => y.name).join(', ')}\n`;
+          }
+          
+          // Add Mangal Dosha if available
+          if (data.mangal_dosha) {
+            chartInfo += `Mangal Dosha: ${data.mangal_dosha.has_dosha ? 'Yes' : 'No'}\n`;
+          }
+          
+          console.log(`Successfully converted kundli data to planet positions format: ${chartInfo.substring(0, 100)}...`);
+          return chartInfo.trim();
+        }
+      }
+    } catch (error) {
+      console.error(`Error parsing JSON chart data: ${error.message}`);
     }
   }
   
-  return chartInfo;
+  // Return empty string if nothing found
+  console.log('No chart info found in text or JSON');
+  return '';
 } 
