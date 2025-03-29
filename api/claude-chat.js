@@ -115,8 +115,19 @@ export default async function handler(req, res) {
       });
     }
     
-    // Get API key
-    const apiKey = process.env.CLAUDE_API_KEY || process.env.VITE_CLAUDE_API_KEY;
+    // Get API key - first try from headers, then environment variables
+    const headerApiKey = req.headers['x-claude-api-key'];
+    const envApiKey = process.env.CLAUDE_API_KEY || process.env.VITE_CLAUDE_API_KEY;
+    const apiKey = headerApiKey || envApiKey;
+    
+    // Log the source of the API key (for debugging)
+    if (headerApiKey) {
+      console.log(`Using Claude API key from X-Claude-API-Key header (starts with: ${headerApiKey.substring(0, 10)}...)`);
+    } else if (envApiKey) {
+      console.log(`Using Claude API key from environment variables (starts with: ${envApiKey.substring(0, 10)}...)`);
+    } else {
+      console.log('No Claude API key found in headers or environment variables');
+    }
     
     // Check if API key is available
     if (!apiKey) {
@@ -192,8 +203,20 @@ export default async function handler(req, res) {
           // Log headers for debugging (without the API key value)
           console.log('Request headers:', {
             'Content-Type': 'application/json',
-            'x-api-key': apiKey ? `${apiKey.substring(0, 8)}...` : 'not set',
+            'x-api-key': apiKey ? `${apiKey.substring(0, 10)}...` : 'not set',
             'anthropic-version': '2023-06-01'
+          });
+          
+          // Log the complete request for troubleshooting (except the full API key)
+          console.log('Claude API request details:', {
+            url: 'https://api.anthropic.com/v1/messages',
+            method: 'POST',
+            model: requestData.model,
+            message_count: requestData.messages.length,
+            max_tokens: requestData.max_tokens,
+            temperature: requestData.temperature,
+            api_key_present: !!apiKey,
+            api_key_prefix: apiKey ? apiKey.substring(0, 10) : 'none'
           });
           
           return await axios({

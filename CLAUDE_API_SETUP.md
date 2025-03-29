@@ -13,7 +13,11 @@ The application has been updated to use the Anthropic Claude API as the AI backe
 
 ## Setting Up Your Claude API Key
 
-### Local Development
+There are two ways to configure the Claude API key:
+
+### Option 1: Environment Variables (Recommended for Production)
+
+#### Local Development
 
 1. Open your `.env` file or create one if it doesn't exist
 2. Add your Claude API key:
@@ -22,7 +26,7 @@ The application has been updated to use the Anthropic Claude API as the AI backe
    ```
    Replace `sk-ant-api03-xxxxxxxxxxxx` with your actual Claude API key.
 
-### Vercel Deployment
+#### Vercel Deployment
 
 1. Log in to your [Vercel dashboard](https://vercel.com/)
 2. Select your Astroworld project
@@ -34,6 +38,40 @@ The application has been updated to use the Anthropic Claude API as the AI backe
    Both variables should be set to ensure proper functioning in both server-side and client-side code.
 
 5. Save your changes and redeploy your application
+
+### Option 2: HTTP Header (Recommended for Testing)
+
+For testing or development purposes, you can also pass the Claude API key via an HTTP header. This is useful when you want to test with different API keys without changing the environment variables.
+
+To use this method, add the `X-Claude-API-Key` header to your requests:
+
+```javascript
+const response = await fetch('/api/claude/chat', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Claude-API-Key': 'sk-ant-api03-xxxxxxxxxxxx' // Your Claude API key
+  },
+  body: JSON.stringify({
+    model: 'claude-3-5-sonnet-20241022',
+    messages: [/* your messages */],
+    temperature: 0.7,
+    max_tokens: 1000
+  })
+});
+```
+
+The API will use the key from the header if provided, otherwise it will fall back to the environment variables.
+
+## Current API Key
+
+The current Claude API key being used is:
+
+```
+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
+```
+
+This key should be set in the Vercel environment variables.
 
 ## Verifying the Setup
 
@@ -53,11 +91,12 @@ node vercel-deploy-test.js
 
 ### "API key is not configured" Error
 
-If you see this error, it means the Claude API key is not properly set in your environment variables. Check that:
+If you see this error, it means the Claude API key is not properly set in your environment variables or provided in the header. Check that:
 
 1. The environment variable is named correctly (`CLAUDE_API_KEY` and `VITE_CLAUDE_API_KEY`)
 2. The API key is valid and formatted correctly (starts with `sk-ant-`)
 3. The environment variables are set in the correct environment (Development, Preview, Production)
+4. If using the header method, the header name is exactly `X-Claude-API-Key`
 
 ### "Invalid x-api-key" Error
 

@@ -1,7 +1,8 @@
 // Test script for Vercel deployment of Claude API
-const axios = require('axios');
+import axios from 'axios';
 
 const BASE_URL = 'https://astroworld-delta.vercel.app';
+const CLAUDE_API_KEY = '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';
 
 async function testClaudeAPI() {
   console.log('Testing Claude API integration on Vercel deployment');
@@ -41,7 +42,8 @@ async function testClaudeAPI() {
       },
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Claude-API-Key': CLAUDE_API_KEY
         }
       }
     );
@@ -75,7 +77,8 @@ async function testClaudeAPI() {
       },
       {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Claude-API-Key': CLAUDE_API_KEY
         }
       }
     );
