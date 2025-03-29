@@ -383,11 +383,18 @@ class ApiService {
         return cachedResponse.data.insight;
       }
       
-      // Try with exponential backoff - use longer timeout for single comprehensive request
-      const insightResponse = await this.retryWithExponentialBackoff(
-        async () => {
-          // Use a custom Axios instance with longer timeout specifically for this request
-          return await axios.post('/api/together/chat', {
+      // Progressive token strategy - start with 2000 tokens and increase if needed
+      let maxTokens = 2000;
+      let attempt = 0;
+      const maxAttempts = 3;
+      let responseContent = "";
+      
+      while (attempt < maxAttempts) {
+        try {
+          console.log(`Making Together AI request for ${insightType} with ${maxTokens} max_tokens (attempt ${attempt + 1}/${maxAttempts})`);
+          
+          // Make the API request with current token limit
+          const insightResponse = await axios.post('/api/together/chat', {
             model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
             messages: [
               {
@@ -400,7 +407,7 @@ class ApiService {
               }
             ],
             temperature: 0.7,
-            max_tokens: 8000  // Reduced from 10000 to help with timeouts
+            max_tokens: maxTokens
           }, {
             timeout: 28000,  // 28 seconds (just under Vercel's 30s limit)
             headers: {
@@ -409,14 +416,45 @@ class ApiService {
               'X-Insight-Type': insightType
             }
           });
-        },
-        1, // Reduced to 1 retry (since we're using a longer timeout)
-        1000, // Start with 1 second delay
-        2 // Double the delay each time
-      );
+          
+          // Extract content and check if it appears truncated
+          responseContent = insightResponse.data.choices[0].message.content;
+          const tokenCount = insightResponse.data.usage?.completion_tokens || 0;
+          
+          // Check for truncation signs
+          if (tokenCount < 50 || responseContent.length < 200 || 
+              responseContent.match(/##\s*[^#]+$/) ||  // Ends with a section header with no content
+              (responseContent.includes('## Birth Details') && !responseContent.includes('## Birth Chart Overview'))) {
+            
+            console.log(`Response appears truncated (${tokenCount} tokens, ${responseContent.length} chars). Retrying with increased token limit.`);
+            maxTokens = Math.min(maxTokens * 2, 8000);  // Double tokens but cap at 8000
+            attempt++;
+            await this.delay(1000);
+            continue;
+          }
+          
+          // If we get here, the response is complete enough
+          break;
+          
+        } catch (error: any) {
+          console.error(`Error on attempt ${attempt + 1} for ${insightType}:`, error?.message || error);
+          
+          // If we've reached max attempts, throw the error
+          if (attempt >= maxAttempts - 1) {
+            throw error;
+          }
+          
+          // Otherwise increment attempt, increase tokens, and retry
+          attempt++;
+          maxTokens = Math.min(maxTokens * 2, 8000);
+          await this.delay(2000);
+        }
+      }
       
-      // Extract the insight from the response
-      const responseContent = insightResponse.data.choices[0].message.content;
+      // If we still don't have a valid response after all attempts, throw error
+      if (!responseContent || responseContent.length < 50) {
+        throw new Error(`Failed to generate ${insightType} insight after multiple attempts`);
+      }
       
       // Cache successful response
       cache.set(cacheKey, {
@@ -718,29 +756,73 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         // Make single request with appropriate system prompt
         const comprehensiveInsight = await this.retryWithExponentialBackoff(
           async () => {
-            return await this.client.post('/api/together/chat', {
-              model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-              messages: [
-                {
-                  role: "system",
-                  content: "You are an expert Vedic astrologer providing comprehensive birth chart readings. Always include all the sections requested by the user with exactly the section headings specified. Be concise but insightful in each section. Always use the ## prefix for headings and never use bold formatting or asterisks for headers. Format lists as numbered items (1., 2., 3.) exactly as requested in the prompt."
-                },
-                {
-                  role: "user",
-                  content: comprehensivePrompt
+            // Starting with 3000 tokens and will increase if response is truncated
+            let maxTokens = 3000;
+            let attempt = 0;
+            const maxAttempts = 3;
+            let response;
+            
+            while (attempt < maxAttempts) {
+              try {
+                console.log(`Making Together API request with ${maxTokens} max_tokens (attempt ${attempt + 1}/${maxAttempts})`);
+                
+                response = await this.client.post('/api/together/chat', {
+                  model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                  messages: [
+                    {
+                      role: "system",
+                      content: "You are an expert Vedic astrologer providing comprehensive birth chart readings. Always include all the sections requested by the user with exactly the section headings specified. Be concise but insightful in each section. Always use the ## prefix for headings and never use bold formatting or asterisks for headers. Format lists as numbered items (1., 2., 3.) exactly as requested in the prompt."
+                    },
+                    {
+                      role: "user",
+                      content: comprehensivePrompt
+                    }
+                  ],
+                  temperature: 0.7,
+                  max_tokens: maxTokens
+                });
+                
+                // Check if response seems truncated (fewer than 100 tokens or stops in the middle of Birth Details)
+                const content = response.data.choices[0].message.content;
+                const tokenCount = response.data.usage?.completion_tokens || 0;
+                
+                if (tokenCount < 100 || 
+                    (content.includes('## Birth Details') && !content.includes('## Birth Chart Overview')) || 
+                    content.match(/Date: .{1,10}$/) || 
+                    content.match(/Time: .{1,10}$/)) {
+                  
+                  console.log(`Response appears truncated (${tokenCount} tokens). Retrying with increased token limit.`);
+                  maxTokens = Math.min(maxTokens * 2, 10000); // Double the token limit but cap at 10000
+                  attempt++;
+                  await this.delay(1000); // Wait a bit before retrying
+                  continue;
                 }
-              ],
-              temperature: 0.7,
-              max_tokens: 10000
-            });
+                
+                // If we get here, the response is complete enough
+                break;
+              } catch (error) {
+                console.error(`Error on attempt ${attempt + 1}:`, error);
+                if (attempt >= maxAttempts - 1) throw error;
+                attempt++;
+                maxTokens = Math.min(maxTokens * 2, 10000); // Double the token limit but cap at 10000
+                await this.delay(1000); // Wait a bit before retrying
+              }
+            }
+            
+            return response;
           },
-          2, // Max 2 retries
+          2, // Max 2 retries for the overall function
           1000, // Start with 1 second delay
           3 // Triple the delay each time
         );
         
         // Extract the insight from the response
-        const fullInsight = comprehensiveInsight.data.choices[0].message.content;
+        const fullInsight = comprehensiveInsight?.data?.choices?.[0]?.message?.content || "";
+        
+        // If we still got an empty or extremely short response after all retries, throw an error
+        if (!fullInsight || fullInsight.length < 50) {
+          throw new Error("Failed to generate a complete astrological reading after multiple attempts");
+        }
         
         // Process the insight to ensure correct formatting for the UI components
         // Replace any bold headers with ## headers if needed
@@ -769,7 +851,7 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
           console.log('Attempting simplified fallback request');
           const fallbackPrompt = `Generate a brief astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}.
 
-Include exactly these headers with ## prefix:
+IMPORTANT - INCLUDE ALL THESE SECTIONS WITH EXACT HEADERS:
 
 ## Birth Details
 Date: ${birthData.date}
@@ -778,49 +860,59 @@ Place: ${birthData.place}
 Name: ${birthData.name}
 
 ## Birth Chart Overview
-[Brief overview of the chart]
+[Brief chart overview - no more than 2-3 sentences]
 
 ## Ascendant/Lagna
-[Information about the rising sign]
+[Brief rising sign description - no more than 2-3 sentences]
 
 ## Personality Overview
-[Brief personality analysis]
+[Brief personality description - no more than 3-4 sentences]
 
 ## Career Insights
-1. [First career insight]
-2. [Second career insight]
-3. [Third career insight]
+1. [First concise career insight]
+2. [Second concise career insight]
+3. [Third concise career insight]
 
 ## Relationship Patterns
-1. [First relationship insight]
-2. [Second relationship insight]
-3. [Third relationship insight]
+1. [First concise relationship insight]
+2. [Second concise relationship insight]
+3. [Third concise relationship insight]
 
 ## Key Strengths
-1. [First key strength]
-2. [Second key strength]
-3. [Third key strength]
+1. [First strength]
+2. [Second strength]
+3. [Third strength]
+4. [Fourth strength]
+5. [Fifth strength]
 
 ## Potential Challenges
 1. [First challenge]
 2. [Second challenge]
 3. [Third challenge]
+4. [Fourth challenge]
+5. [Fifth challenge]
 
 ## Significant Chart Features
-1. [First significant feature]
-2. [Second significant feature]
-3. [Third significant feature]
+1. [First chart feature]
+2. [Second chart feature]
+3. [Third chart feature]
+4. [Fourth chart feature]
+5. [Fifth chart feature]
 
-IMPORTANT: 
-1. Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks.
-2. Format all lists as numbered items (1., 2., 3.) as shown above.
-3. Each point should be distinct and separately numbered.
+IMPORTANT INSTRUCTIONS:
+1. Use EXACTLY these section headers with the ## prefix
+2. Keep each point very concise (10-15 words maximum)
+3. Format lists with numbers (1., 2., 3.) exactly as shown
+4. Include ALL sections - this is critical
 
-Keep it simple and focused. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
+Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
 
-          const fallbackInsight = await this.getAIInsight(fallbackPrompt, 
-            "You are an expert Vedic astrologer providing concise birth chart readings. Always include all the sections requested with exactly the section headings specified. Always use the ## prefix for headings and never use bold formatting or asterisks for headers. Format lists as numbered items (1., 2., 3.) exactly as requested.", 
-            "comprehensive_fallback");
+          // Try with progressive token increase for the fallback
+          const fallbackInsight = await this.getAIInsight(
+            fallbackPrompt, 
+            "You are an expert Vedic astrologer providing concise birth chart readings. Include ALL requested sections with EXACT headers shown. Be extremely concise.", 
+            "comprehensive_fallback"
+          );
           
           // Process the fallback insight to ensure proper formatting
           const processedFallbackInsight = fallbackInsight
