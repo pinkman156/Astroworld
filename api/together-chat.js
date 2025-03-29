@@ -210,9 +210,9 @@ ${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
       const birthTime = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
       const birthPlace = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
       
-      const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} (born ${birthDate}, ${birthTime}, ${birthPlace}). ${chartInfo ? `\n\nBirth chart details:\n${chartInfo}` : ''}
+      const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} (born ${birthDate}, ${birthTime} IST, ${birthPlace}). ${chartInfo ? `\n\nBirth chart details:\n${chartInfo}` : ''}
 
-When describing the birth chart, be sure to explicitly mention the Sun sign and Moon sign (e.g., "Sun in Gemini" and "Moon in Scorpio") in the Birth Chart Overview section.
+When describing the birth chart, be sure to explicitly mention the Sun sign, Moon sign, and Ascendant/Lagna (e.g., "Sun in Gemini", "Moon in Scorpio", and "Ascendant/Lagna in Virgo") in the Birth Chart Overview section. Always clearly indicate the Rising sign or Ascendant.
 
 Cover birth details, personality traits, career options (3), relationship patterns (3), key strengths (5), and challenges (5).`;
       
@@ -302,12 +302,12 @@ Cover birth details, personality traits, career options (3), relationship patter
             modifiedPrompt = `Generate a concise birth chart reading for ${name} (born on ${date} at ${time} in ${place}). Include ONLY these sections with ## prefix:
               
 ## Birth Details
-## Birth Chart Overview (brief overview of key planetary positions)
+## Birth Chart Overview (brief overview of key planetary positions including Sun, Moon, and Ascendant/Lagna)
 ## Personality Overview (key traits)
 ## Key Strengths (list 3 strengths)
 ## Potential Challenges (list 3 challenges)
 
-Keep each section under 75 words.`;
+Keep each section under 75 words. Make sure to clearly mention the Ascendant/Rising sign in the Birth Chart Overview.`;
             
             // Extract chart data if available
             const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);

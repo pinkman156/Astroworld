@@ -658,7 +658,7 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
         console.log('Making a single comprehensive astrological analysis request');
         
         // Create a prompt that requests all the information needed in a structured format
-        const comprehensivePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}.
+        const comprehensivePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} IST in ${birthData.place}.
 
 Birth chart details: ${JSON.stringify(summarizedChartData)}
 

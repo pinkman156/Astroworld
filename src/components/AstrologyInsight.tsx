@@ -550,14 +550,69 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                 
                 {/* Ascendant/Lagna Dashboard */}
                 {(() => {
-                  // Extract Ascendant section
+                  // Extract Ascendant section with improved patterns
                   const ascendantMatch = insight.message.match(/## Ascendant\/Lagna([\s\S]*?)(?=##|$)/) ||
-                                        insight.message.match(/Ascendant\/Lagna:([\s\S]*?)(?=Personality|Birth Chart|Career|$)/i);
-                  const ascendantText = ascendantMatch ? ascendantMatch[1].trim() : '';
+                                        insight.message.match(/Ascendant\/Lagna:([\s\S]*?)(?=Personality|Birth Chart|Career|$)/i) ||
+                                        insight.message.match(/Rising sign:?\s*([^.,\n]+(?:[^.\n]+)?)/i) ||
+                                        insight.message.match(/Ascendant(?:\s+is)?(?:\s+in)?\s+([^.,\n]+)/i) ||
+                                        insight.message.match(/Lagna(?:\s+is)?(?:\s+in)?\s+([^.,\n]+)/i) ||
+                                        insight.message.match(/(?:with\s+)?(?:a\s+)?([A-Z][a-z]+)\s+(?:rising|ascendant|lagna)/i);
+                  
+                  // Find Ascendant in Birth Chart Overview section if not found yet
+                  const birthChartSection = !ascendantMatch ? 
+                                          insight.message.match(/Birth Chart Overview:([\s\S]*?)(?=Personality|Career|Relationship|Key Strengths|$)/i) ||
+                                          insight.message.match(/## Birth Chart Overview([\s\S]*?)(?=##|$)/) : null;
+                  
+                  let ascendantText = ascendantMatch ? ascendantMatch[1].trim() : '';
+                  
+                  // If not found directly but Birth Chart section exists, try to extract from there
+                  if (!ascendantText && birthChartSection) {
+                    const risingInSection = birthChartSection[1].match(/Rising sign:?\s*([^.,\n]+(?:[^.\n]+)?)/i) ||
+                                           birthChartSection[1].match(/Ascendant(?:\s+is)?(?:\s+in)?\s+([^.,\n]+)/i) ||
+                                           birthChartSection[1].match(/Lagna(?:\s+is)?(?:\s+in)?\s+([^.,\n]+)/i) ||
+                                           birthChartSection[1].match(/([A-Z][a-z]+)\s+(?:rising|ascendant|lagna)/i);
+                    
+                    if (risingInSection) {
+                      ascendantText = risingInSection[1].trim();
+                      
+                      // If it's just the sign name without description, expand it
+                      if (ascendantText.split(' ').length <= 2) {
+                        const signName = ascendantText.split(' ')[0];
+                        // Check if the entire section has more details about this sign
+                        const fullSentenceMatch = birthChartSection[1].match(new RegExp(`${signName}[^.]*(?:rising|ascendant|lagna)[^.]*\\.`, 'i'));
+                        if (fullSentenceMatch) {
+                          ascendantText = fullSentenceMatch[0].trim();
+                        } else {
+                          // Add a basic description based on sign
+                          const descriptions = {
+                            'Aries': 'suggests leadership qualities, courage, and dynamic energy',
+                            'Taurus': 'indicates stability, persistence, and practical approach',
+                            'Gemini': 'suggests versatility, curiosity, and strong communication skills',
+                            'Cancer': 'indicates sensitivity, nurturing nature, and emotional depth',
+                            'Leo': 'suggests confidence, creativity, and natural leadership',
+                            'Virgo': 'indicates analytical skills, attention to detail, and practical approach',
+                            'Libra': 'suggests diplomacy, social grace, and sense of fairness',
+                            'Scorpio': 'indicates intensity, determination, and emotional depth',
+                            'Sagittarius': 'suggests optimism, love of freedom, and philosophical nature',
+                            'Capricorn': 'indicates ambition, discipline, and practical approach',
+                            'Aquarius': 'suggests innovation, independence, and humanitarian values',
+                            'Pisces': 'indicates intuition, compassion, and spiritual inclination'
+                          };
+                          
+                          if (Object.keys(descriptions).includes(signName)) {
+                            ascendantText = `Rising sign: ${signName}, ${descriptions[signName as keyof typeof descriptions]}`;
+                          } else {
+                            ascendantText = `Rising sign: ${ascendantText}`;
+                          }
+                        }
+                      }
+                    }
+                  }
                   
                   console.log('Ascendant text extracted:', ascendantText);
                   
-                  // Only render this section if we have ascendant content
+                  // Only render this section if we have ascendant content or can derive it
+                  // Now we want to show this section even with minimal content
                   if (!ascendantText) {
                     return null;
                   }
@@ -593,10 +648,32 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                     }
                   }
                   
-                  // Always use the actual text from the API response
-                  // Even if it's short, it's better than a default message
-                  if (ascendantText) {
-                    ascendantDescription = ascendantText;
+                  // Check alternative Sanskrit names for signs
+                  const sanskritNames = {
+                    'Mesha': 'Aries', 
+                    'Vrishabha': 'Taurus', 
+                    'Mithuna': 'Gemini', 
+                    'Karka': 'Cancer', 
+                    'Simha': 'Leo', 
+                    'Kanya': 'Virgo', 
+                    'Tula': 'Libra', 
+                    'Vrischika': 'Scorpio', 
+                    'Dhanu': 'Sagittarius', 
+                    'Makara': 'Capricorn', 
+                    'Kumbha': 'Aquarius', 
+                    'Meena': 'Pisces'
+                  };
+                  
+                  for (const [sanskrit, western] of Object.entries(sanskritNames)) {
+                    if (ascendantText.includes(sanskrit)) {
+                      // Find the corresponding western sign in our signNames array
+                      const westernSign = signNames.find(sign => sign.name === western);
+                      if (westernSign) {
+                        ascendantSign = westernSign.symbol;
+                        signColor = westernSign.color;
+                        break;
+                      }
+                    }
                   }
                   
                   console.log("Ascendant text from API:", ascendantText);
@@ -1524,6 +1601,186 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                   </Paper>
                                 )}
                               </Box>
+                            </CardContent>
+                          </Card>
+                    </motion.div>
+                  );
+                })()}
+                
+                {/* Birth Chart Overview Dashboard */}
+                {(() => {
+                  // Extract Birth Chart Overview section
+                  const birthChartMatch = insight.message.match(/## Birth Chart Overview([\s\S]*?)(?=##|$)/) || 
+                                         insight.message.match(/Birth Chart Overview:([\s\S]*?)(?=Personality|Career|Relationship|Key Strengths|$)/i);
+                  const birthChartText = birthChartMatch ? birthChartMatch[1].trim() : '';
+                  
+                  // Improved extraction logic: Get planets, elements, patterns
+                  // Parse text for sun, moon, and rising information
+                  // Check for Sun sign
+                  const sunMatch = birthChartText.match(/Sun(?:\s+is)?(?:\s+in)?\s+([^,.\n]+)/i) || 
+                                 birthChartText.match(/with\s+(?:the\s+)?Sun\s+in\s+([^,.\n]+)/i) ||
+                                 birthChartText.match(/Sun\s+sign(?:\s+is)?:\s+([^,.\n]+)/i);
+                  const sunSign = sunMatch ? sunMatch[1].trim() : '';
+                  
+                  // Check for Moon sign
+                  const moonMatch = birthChartText.match(/Moon(?:\s+is)?(?:\s+in)?\s+([^,.\n]+)/i) ||
+                                   birthChartText.match(/with\s+(?:the\s+)?Moon\s+in\s+([^,.\n]+)/i) ||
+                                   birthChartText.match(/Moon\s+sign(?:\s+is)?:\s+([^,.\n]+)/i);
+                  const moonSign = moonMatch ? moonMatch[1].trim() : '';
+                  
+                  // Check for Rising/Ascendant sign
+                  const risingMatch = birthChartText.match(/(?:Rising|Ascendant|Lagna)(?:\s+is)?(?:\s+in)?\s+([^,.\n]+)/i) ||
+                                     birthChartText.match(/with\s+(?:a\s+)?([^,.\n]+)\s+(?:rising|ascendant|lagna)/i) ||
+                                     birthChartText.match(/(?:Rising|Ascendant|Lagna)\s+sign(?:\s+is)?:\s+([^,.\n]+)/i);
+                  const risingSign = risingMatch ? risingMatch[1].trim() : '';
+                  
+                  console.log('Extracted Sun:', sunSign, 'Moon:', moonSign, 'Rising:', risingSign);
+                  
+                  // Only render this section if we have birth chart content
+                  if (!birthChartText) {
+                    return null;
+                  }
+                  
+                  return (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.2 }}
+                          whileHover={{ y: -5 }}
+                        >
+                          <Card sx={{ 
+                            overflow: 'hidden', 
+                            boxShadow: '0 4px 24px rgba(0,0,0,0.4)', 
+                            mb: 3,
+                            background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.25) 0%, rgba(139, 92, 246, 0.25) 100%)',
+                            border: '1px solid rgba(124, 58, 237, 0.35)'
+                          }}>
+                            <Box sx={{ 
+                              p: 2, 
+                              background: 'linear-gradient(90deg, #7C3AED 0%, #8B5CF6 100%)', 
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              py: 1.5
+                            }}>
+                              <Typography variant="h6" fontWeight={500}>Birth Chart Overview</Typography>
+                            </Box>
+                            <CardContent sx={{ p: 2, bgcolor: 'rgba(13, 18, 35, 0.8)' }}>
+                              {/* Sun, Moon, and Rising signs grid */}
+                              {(sunSign || moonSign || risingSign) && (
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  flexWrap: 'wrap', 
+                                  gap: 2,
+                                  mb: 2
+                                }}>
+                                  {sunSign && (
+                                    <Paper sx={{ 
+                                      flex: '1 1 calc(33.333% - 16px)', 
+                                      minWidth: '180px',
+                                      p: 2, 
+                                      bgcolor: 'rgba(252, 211, 77, 0.15)', 
+                                      border: '1px solid rgba(252, 211, 77, 0.2)'
+                                    }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                        <Box sx={{ 
+                                          width: 36, 
+                                          height: 36, 
+                                          borderRadius: '50%', 
+                                          bgcolor: 'rgba(252, 211, 77, 0.2)', 
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          mr: 1.5
+                                        }}>
+                                          <Typography sx={{ fontSize: '1.2rem', color: '#FCD34D' }}>☉</Typography>
+                                        </Box>
+                                        <Typography variant="subtitle1" sx={{ color: 'white', fontWeight: 500 }}>
+                                          Sun
+                                        </Typography>
+                                      </Box>
+                                      <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                                        {sunSign}
+                                      </Typography>
+                                    </Paper>
+                                  )}
+                                  
+                                  {moonSign && (
+                                    <Paper sx={{ 
+                                      flex: '1 1 calc(33.333% - 16px)', 
+                                      minWidth: '180px',
+                                      p: 2, 
+                                      bgcolor: 'rgba(147, 197, 253, 0.15)', 
+                                      border: '1px solid rgba(147, 197, 253, 0.2)'
+                                    }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                        <Box sx={{ 
+                                          width: 36, 
+                                          height: 36, 
+                                          borderRadius: '50%', 
+                                          bgcolor: 'rgba(147, 197, 253, 0.2)', 
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          mr: 1.5
+                                        }}>
+                                          <Typography sx={{ fontSize: '1.2rem', color: '#93C5FD' }}>☽</Typography>
+                                        </Box>
+                                        <Typography variant="subtitle1" sx={{ color: 'white', fontWeight: 500 }}>
+                                          Moon
+                                        </Typography>
+                                      </Box>
+                                      <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                                        {moonSign}
+                                      </Typography>
+                                    </Paper>
+                                  )}
+                                  
+                                  {risingSign && (
+                                    <Paper sx={{ 
+                                      flex: '1 1 calc(33.333% - 16px)', 
+                                      minWidth: '180px',
+                                      p: 2, 
+                                      bgcolor: 'rgba(248, 113, 113, 0.15)', 
+                                      border: '1px solid rgba(248, 113, 113, 0.2)'
+                                    }}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                        <Box sx={{ 
+                                          width: 36, 
+                                          height: 36, 
+                                          borderRadius: '50%', 
+                                          bgcolor: 'rgba(248, 113, 113, 0.2)', 
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          mr: 1.5
+                                        }}>
+                                          <Typography sx={{ fontSize: '1.2rem', color: '#F87171' }}>↑</Typography>
+                                        </Box>
+                                        <Typography variant="subtitle1" sx={{ color: 'white', fontWeight: 500 }}>
+                                          Rising
+                                        </Typography>
+                                      </Box>
+                                      <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                                        {risingSign}
+                                      </Typography>
+                                    </Paper>
+                                  )}
+                                </Box>
+                              )}
+                              
+                              <Paper sx={{ p: 2, bgcolor: 'rgba(124, 58, 237, 0.15)' }}>
+                                <Typography 
+                                  variant="body1"
+                                  sx={{ 
+                                    color: 'rgba(255, 255, 255, 0.85)', 
+                                    lineHeight: 1.7,
+                                    letterSpacing: '0.01em'
+                                  }}
+                                >
+                                  {birthChartText.replace(/[•*-]/g, '').trim().replace(/^[.]+\s*/g, '')}
+                                </Typography>
+                              </Paper>
                             </CardContent>
                           </Card>
                     </motion.div>
