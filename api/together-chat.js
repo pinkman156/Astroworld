@@ -5,7 +5,7 @@ import axios from 'axios';
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function for exponential backoff retry
-async function retryWithExponentialBackoff(fn, retries = 2, baseDelay = 1000, factor = 2) {
+async function retryWithExponentialBackoff(fn, retries = 3, baseDelay = 1000, factor = 2) {
   let attempt = 0;
   let lastError;
 
@@ -132,8 +132,27 @@ export default async function handler(req, res) {
       model: req.body.model,
       messages: req.body.messages,
       temperature: req.body.temperature || 0.7,
-      max_tokens: Math.min(req.body.max_tokens || 10000, 10000), // Cap at 10000 tokens to respect model context limits
+      max_tokens: Math.min(req.body.max_tokens || 16000, 16000), // Increase to 16000 tokens to avoid truncation
     };
+    
+    // Add specific instructions to avoid truncation in the system prompt
+    if (requestData.messages && requestData.messages.length > 0 && requestData.messages[0].role === 'system') {
+      // Check if this is an astrological reading request
+      const isAstrologyReading = requestData.messages.some(msg => 
+        msg.role === 'user' && 
+        (msg.content.includes('astrological reading') || 
+         msg.content.includes('birth chart') ||
+         msg.content.includes('Planet Positions:'))
+      );
+
+      if (isAstrologyReading) {
+        // Enhance the system prompt to avoid truncation
+        requestData.messages[0].content += " Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content.";
+        
+        // For astrological readings, ensure max_tokens is high enough
+        requestData.max_tokens = 16000;
+      }
+    }
     
     // Pre-process any request containing planet positions with coordinates
     console.log('Checking for planet positions in the request...');
@@ -371,7 +390,7 @@ export default async function handler(req, res) {
       requestData.messages = [
         {
           role: 'system',
-          content: systemPrompt
+          content: systemPrompt + " Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content."
         },
         {
           role: 'user',
@@ -379,8 +398,8 @@ export default async function handler(req, res) {
         }
       ];
       
-      // Reduce max tokens for more reliable response
-      requestData.max_tokens = 2000;
+      // Keep token limit high to avoid truncation
+      requestData.max_tokens = 16000;
       
       console.log('Optimized astrological reading prompt created.');
     }
@@ -435,66 +454,28 @@ export default async function handler(req, res) {
       const responseContent = response.data.choices[0]?.message?.content || '';
       const tokenCount = response.data.usage?.completion_tokens || 0;
       
-      // If response seems truncated (tiny response with "stop" reason)
-      if (tokenCount < 50 && responseContent.length < 200 && response.data.choices[0].finish_reason === 'stop') {
+      // If response seems truncated (possible indicators of truncation)
+      if ((tokenCount < 300 && responseContent.length < 1000) || 
+          responseContent.includes("Let me continue") || responseContent.includes("I'll continue") ||
+          (responseContent.match(/##\s*[^#]+$/) && responseContent.length < 2000) || // Ends with a section header with little content
+          (responseContent.includes('## Birth Details') && !responseContent.includes('## Birth Chart Overview')) ||
+          (responseContent.includes('## Key Strengths') && !responseContent.includes('## Potential Challenges')) ||
+          response.data.choices[0].finish_reason === 'length') {
+        
         console.warn(`Possible truncated response detected: ${tokenCount} tokens, finish_reason: ${response.data.choices[0].finish_reason}`);
         
-        // Check if this is a career-related query
-        const isCareerQuery = requestData.messages.some(msg => 
-          msg.role === 'user' && 
-          (msg.content.includes('career') || 
-           msg.content.includes('profession') || 
-           msg.content.includes('job') ||
-           msg.content.includes('occupation'))
-        );
-
-        // Check if this is a complex astrology reading with multiple sections
-        const isComplexAstrologyReading = requestData.messages.some(msg => 
-          msg.role === 'user' && 
-          msg.content.includes('astrological reading') && 
-          msg.content.includes('section headers') &&
-          msg.content.includes('##')
-        );
+        // For any truncated response, try a simpler retry with better instructions
+        console.log('Truncated response detected. Applying special handling for retry.');
         
-        if (isComplexAstrologyReading) {
-          console.log('Complex astrology reading detected with truncated response. Applying special handling.');
-          
-          // Extract basic birth details from the request
-          const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
-          
-          // Parse planet positions if present
-          let cleanedPlanets = '';
-          if (userMessage.includes('Planet Positions:')) {
-            const planetLines = userMessage.split('\n').filter(line => 
-              line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
-            );
-            
-            console.log(`Found ${planetLines.length} planet lines in complex astrology retry`);
-            
-            // Format planet positions without coordinates - using improved patterns
-            cleanedPlanets = planetLines.map(line => {
-              // Improved regex to handle multiple formats
-              const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:[\s:]*(?:at|longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*)?(\s+\(Retrograde\))?/i);
-              
-              if (match) {
-                const planetName = match[1].trim();
-                const signName = match[2].trim();
-                const retrograde = match[3] ? ' (Retrograde)' : '';
-                
-                return `${planetName}: ${signName}${retrograde}`;
-              }
-              
-              // If the regex didn't match, try a more aggressive cleanup
-              return line
-                .replace(/\s+at\s+\d+\.\d+[°\s]*/g, '') // Remove "at" format coordinates
-                .replace(/[\s:]*(?:longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*/g, '') // Remove longitude/degree mentions
-                .replace(/\s+\d+\.\d+[°\s]*/g, '') // Remove any remaining decimal numbers with degree symbols
-                .replace(/:\s+/, ': ') // Standardize spacing after colon
-                .trim();
-            }).join('   ');
-          }
-          
-          // Extract name and birth details using regex if possible
+        // Extract user message
+        const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
+        
+        // Create simplified prompt
+        let simplifiedPrompt = userMessage;
+        
+        // If it's an astrological query, ensure key format is preserved
+        if (userMessage.includes('astrological reading') || userMessage.includes('birth chart') || userMessage.includes('Planet Positions:')) {
+          // Extract core birth data
           const nameMatch = userMessage.match(/for\s+([^(,\n]+)/i);
           const birthDetailsMatch = userMessage.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
           
@@ -503,185 +484,81 @@ export default async function handler(req, res) {
           let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
           let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
           
-          // Create a simplified, clean prompt
-          let modifiedPrompt = `Generate a concise birth chart reading for ${name} born on ${date} at ${time} in ${place}.`;
-          
-          // Add planet positions if we extracted them
-          if (cleanedPlanets) {
-            modifiedPrompt += `   Planet Positions:   ${cleanedPlanets}`;
+          // Extract planet positions if present
+          let planetPositions = '';
+          if (userMessage.includes('Planet Positions:')) {
+            const planetPositionsMatch = userMessage.match(/Planet Positions:([\s\S]*?)(?:Include|Section|##|$)/i);
+            if (planetPositionsMatch) {
+              planetPositions = planetPositionsMatch[1].trim();
+            }
           }
           
-          // Add simplified section headers
-          modifiedPrompt += `   Include only these sections:   Birth Details: Date, Time, Place, Name   Birth Chart Overview: Key planetary positions including Sun, Moon, and Ascendant/Lagna   Personality Overview: Key traits   Key Strengths: 3 strengths   Potential Challenges: 3 challenges   Make sure to clearly mention the Sun sign, Moon sign, and Ascendant/Rising sign. Keep each section brief.`;
-          
-          // Extract chart data if available (for more complex cases)
-          const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
-          if (chartDataMatch && chartDataMatch[1]) {
-            modifiedPrompt += ` Chart data: ${chartDataMatch[1]}`;
+          // Construct clear, simplified prompt
+          simplifiedPrompt = `Generate a complete astrological reading for ${name} born on ${date} at ${time} in ${place}.`;
+          if (planetPositions) {
+            simplifiedPrompt += `\n\nPlanet Positions:\n${planetPositions}`;
           }
           
-          console.log('Simplified prompt for retry:', modifiedPrompt.substring(0, 100) + '...');
-          
-          // Create modified request with simplified system prompt
-          const modifiedRequest = {
-            ...requestData,
-            messages: [
-              {
-                role: 'system',
-                content: 'You are an expert Vedic astrologer. Provide concise, insightful birth chart readings. Focus on delivering essential insights within a limited space. Use ## for section headers and be direct and to the point.'
-              },
-              {
-                role: 'user',
-                content: modifiedPrompt
-              }
-            ],
-            max_tokens: 2000 // Use a smaller token limit for more reliability
-          };
-          
-          try {
-            console.log('Retrying with simplified astrology reading request');
-            
-            // Make the modified request with exponential backoff
-            const retryResponse = await retryWithExponentialBackoff(
-              async () => {
-                return await axios({
-                  method: 'POST',
-                  url: 'https://api.together.xyz/v1/chat/completions',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                  },
-                  data: modifiedRequest,
-                  timeout: 30000 // 30 second timeout for retry
-                });
-              },
-              1, // Max 1 retry to stay within time limits
-              2000, // Start with 2 second delay
-              2 // Double the delay each time
-            );
-            
-            console.log('Simplified astrology reading request successful');
-            
-            // Return the retry response
-            return res.status(200).json(retryResponse.data);
-          } catch (specialRetryError) {
-            console.error('Simplified astrology retry failed:', specialRetryError.message);
-            // Continue to normal response or fall through to other retry mechanisms
-          }
+          simplifiedPrompt += `\n\nInclude ALL of these sections, each with substantive content:
+1. Birth Details (name, date, time, place)
+2. Birth Chart Overview (clearly state Sun sign, Moon sign, and Ascendant/Lagna)
+3. Ascendant/Lagna analysis
+4. Personality Overview
+5. Career Insights (3 specific insights)
+6. Relationship Patterns (3 insights)
+7. Key Strengths (5 strengths)
+8. Potential Challenges (5 challenges)
+9. Significant Chart Features (5 features)
+
+Use section headers with ## and keep points concise but complete. Format lists with numbered format (1., 2., 3.). Make sure to include ALL sections.`;
         }
         
-        if (isCareerQuery) {
-          console.log('Career query detected with truncated response. Applying special handling.');
+        // Create modified request with enhanced system instructions
+        const modifiedRequest = {
+          model: requestData.model,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert Vedic astrologer providing complete readings. IMPORTANT: You must respond with ALL requested sections in full without truncation. Use ## for section headers. Make every section substantive and don\'t skip any requested section.'
+            },
+            {
+              role: 'user',
+              content: simplifiedPrompt
+            }
+          ],
+          max_tokens: 16000, // Maximum possible tokens
+          temperature: 0.7
+        };
+        
+        try {
+          console.log('Retrying with simplified prompt and enhanced instructions');
           
-          // Create a modified version of the query
-          const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
+          // Make the modified request with exponential backoff
+          const retryResponse = await retryWithExponentialBackoff(
+            async () => {
+              return await axios({
+                method: 'POST',
+                url: 'https://api.together.xyz/v1/chat/completions',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${apiKey}`
+                },
+                data: modifiedRequest,
+                timeout: 55000 // Maximum timeout allowed
+              });
+            },
+            3, // Try up to 3 times
+            2000, // Start with 2 second delay
+            2 // Double the delay each time
+          );
           
-          // Parse planet positions if present
-          let cleanedPlanets = '';
-          if (userMessage.includes('Planet Positions:')) {
-            const planetLines = userMessage.split('\n').filter(line => 
-              line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
-            );
-            
-            console.log(`Found ${planetLines.length} planet lines in career query retry`);
-            
-            // Format planet positions without coordinates - using improved patterns
-            cleanedPlanets = planetLines.map(line => {
-              // Improved regex to handle multiple formats
-              const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:[\s:]*(?:at|longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*)?(\s+\(Retrograde\))?/i);
-              
-              if (match) {
-                const planetName = match[1].trim();
-                const signName = match[2].trim();
-                const retrograde = match[3] ? ' (Retrograde)' : '';
-                
-                return `${planetName}: ${signName}${retrograde}`;
-              }
-              
-              // If the regex didn't match, try a more aggressive cleanup
-              return line
-                .replace(/\s+at\s+\d+\.\d+[°\s]*/g, '') // Remove "at" format coordinates
-                .replace(/[\s:]*(?:longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*/g, '') // Remove longitude/degree mentions
-                .replace(/\s+\d+\.\d+[°\s]*/g, '') // Remove any remaining decimal numbers with degree symbols
-                .replace(/:\s+/, ': ') // Standardize spacing after colon
-                .trim();
-            }).join('   ');
-          }
+          console.log('Modified retry request successful');
           
-          // Extract name and birth details using regex if possible
-          const nameMatch = userMessage.match(/for\s+([^(,\n]+)/i);
-          const birthDetailsMatch = userMessage.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
-          
-          let name = nameMatch ? nameMatch[1].trim() : 'the person';
-          let date = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
-          let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
-          let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
-          
-          // Create a more direct prompt focused on listing career options
-          let modifiedPrompt = `Based on the natal chart for ${name} born on ${date} at ${time} in ${place}`;
-          
-          // Add planet positions if we extracted them
-          if (cleanedPlanets) {
-            modifiedPrompt += ` with   Planet Positions:   ${cleanedPlanets}`;
-          }
-          
-          // Add specific career focus
-          modifiedPrompt += `,   list exactly 5 suitable career fields based on astrological influences.   For each career option, give a brief reason why it's suitable.   Then provide 3 professional strengths indicated by the chart.   Use numbered format (1., 2., 3.) for clarity.   Be specific and focus on concrete career paths.`;
-          
-          // Extract chart data if available (for more complex cases)
-          const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
-          if (chartDataMatch && chartDataMatch[1]) {
-            modifiedPrompt += ` Chart data: ${chartDataMatch[1]}`;
-          }
-          
-          console.log('Simplified career prompt for retry:', modifiedPrompt.substring(0, 100) + '...');
-          
-          // Create modified request with specialized system prompt
-          const modifiedRequest = {
-            ...requestData,
-            messages: [
-              {
-                role: 'system',
-                content: 'You are an expert astrologer who specializes in career guidance. Keep responses direct and structured, always using bullet points. '
-              },
-              {
-                role: 'user',
-                content: modifiedPrompt
-              }
-            ],
-            max_tokens: 10000 // Use a smaller token limit for more reliability
-          };
-          
-          try {
-            console.log('Retrying with modified career query');
-            
-            // Make the modified request with exponential backoff
-            const retryResponse = await retryWithExponentialBackoff(
-              async () => {
-                return await axios({
-                  method: 'POST',
-                  url: 'https://api.together.xyz/v1/chat/completions',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                  },
-                  data: modifiedRequest,
-                  timeout: 30000 // 30 second timeout for retry
-                });
-              },
-              1, // Max 1 retry to stay within time limits
-              2000, // Start with 2 second delay
-              2 // Double the delay each time
-            );
-            
-            console.log('Modified career query successful');
-            
-            // Return the retry response
-            return res.status(200).json(retryResponse.data);
-          } catch (specialRetryError) {
-            console.error('Special career retry also failed:', specialRetryError.message);
-            // Continue to normal response or fall through to other retry mechanisms
-          }
+          // Return the retry response
+          return res.status(200).json(retryResponse.data);
+        } catch (specialRetryError) {
+          console.error('Special retry failed:', specialRetryError.message);
+          // Fall through to original response
         }
       }
       
@@ -702,24 +579,80 @@ export default async function handler(req, res) {
         
         try {
           // Create a simplified version of the original request data
-          const simplifiedMessages = requestData.messages.map(msg => {
-            if (msg.role === 'user') {
-              // Simplify user message by taking first sentence and adding brevity instruction
-              const content = msg.content.split('.')[0] ;
-              return { ...msg, content };
-            }
-            return msg;
-          });
+          const userMsg = requestData.messages.find(msg => msg.role === 'user')?.content || '';
           
-          // Create simplified request with lower token limit
+          // Determine if this is an astrological reading
+          const isAstrologyRequest = userMsg.includes('astrological reading') || 
+                                    userMsg.includes('birth chart') || 
+                                    userMsg.includes('Planet Positions:');
+          
+          let simplifiedPrompt = userMsg;
+          
+          // For astrological readings, create a more structured prompt
+          if (isAstrologyRequest) {
+            // Extract key information
+            const nameMatch = userMsg.match(/for\s+([^(,\n]+)/i);
+            const birthDetailsMatch = userMsg.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+            
+            let name = nameMatch ? nameMatch[1].trim() : 'the person';
+            let date = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+            let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
+            let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+            
+            // Extract planet positions if present
+            let planetPositions = '';
+            if (userMsg.includes('Planet Positions:')) {
+              const planetPositionsMatch = userMsg.match(/Planet Positions:([\s\S]*?)(?:Include|Section|##|$)/i);
+              if (planetPositionsMatch) {
+                planetPositions = planetPositionsMatch[1].trim();
+              }
+            }
+            
+            // Create a clear, straightforward prompt
+            simplifiedPrompt = `Generate a complete astrological reading for ${name} born on ${date} at ${time} in ${place}.`;
+            if (planetPositions) {
+              simplifiedPrompt += `\n\nPlanet Positions:\n${planetPositions}`;
+            }
+            
+            simplifiedPrompt += `\n\nInclude ALL of these sections, each with substantive content:
+1. Birth Details (name, date, time, place)
+2. Birth Chart Overview (clearly state Sun sign, Moon sign, and Ascendant/Lagna)
+3. Ascendant/Lagna analysis
+4. Personality Overview
+5. Career Insights (3 specific insights)
+6. Relationship Patterns (3 insights)
+7. Key Strengths (5 strengths)
+8. Potential Challenges (5 challenges)
+9. Significant Chart Features (5 features)
+
+Use section headers with ## and keep points concise but complete. Format lists with numbered format (1., 2., 3.). Make sure to include ALL sections.`;
+          } else {
+            // For non-astrological queries, simplify but keep core request
+            simplifiedPrompt = userMsg.split('.').slice(0, 3).join('.') + '.';
+            if (simplifiedPrompt.length < 50) {
+              simplifiedPrompt = userMsg; // Use original if simplified version is too short
+            }
+          }
+          
+          // Create simplified request with enhanced instructions
           const simplifiedRequest = {
-            ...requestData,
-            messages: simplifiedMessages,
-            max_tokens:10000// Use smaller token limit for retry
+            model: requestData.model,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a concise expert providing complete responses. Cover all requested topics and sections without truncation. Use ## for section headers when appropriate. Be direct and to the point.'
+              },
+              {
+                role: 'user',
+                content: simplifiedPrompt
+              }
+            ],
+            max_tokens: 16000, // Maximum possible tokens to avoid truncation
+            temperature: 0.7
           };
           
           // Log the retry attempt
-          console.log('Retrying with simplified request');
+          console.log('Retrying with simplified request structure');
           
           // Make simplified request with exponential backoff
           const retryResponse = await retryWithExponentialBackoff(
@@ -732,10 +665,10 @@ export default async function handler(req, res) {
                   'Authorization': `Bearer ${apiKey}`
                 },
                 data: simplifiedRequest,
-                timeout: 30000 // 30 second timeout for retry
+                timeout: 55000 // Maximum timeout allowed
               });
             },
-            1, // Max 1 retry to stay within time limits
+            3, // Try up to 3 times
             2000, // Start with 2 second delay
             2 // Double the delay each time
           );

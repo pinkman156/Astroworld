@@ -442,8 +442,8 @@ class ApiService {
         return cachedResponse.data.insight;
       }
       
-      // Progressive token strategy - start with 2000 tokens and increase if needed
-      let maxTokens = 10000;
+      // Start with high token count to avoid truncation
+      let maxTokens = 16000;
       let attempt = 0;
       const maxAttempts = 3;
       let responseContent = "";
@@ -457,6 +457,9 @@ class ApiService {
       
       if (isAstrologyRequest) {
         console.log('Cleaned astrological prompt for better AI processing');
+        
+        // For astrological readings, enhance the system prompt to ensure complete responses
+        systemPrompt += " Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content.";
       }
       
       while (attempt < maxAttempts) {
@@ -479,7 +482,7 @@ class ApiService {
             temperature: 0.7,
             max_tokens: maxTokens
           }, {
-            timeout: 28000,  // 28 seconds (just under Vercel's 30s limit)
+            timeout: 55000,  // Increased timeout to allow for more complete responses
             headers: {
               'Content-Type': 'application/json',
               'X-Request-Type': 'astrological-insight',
@@ -491,15 +494,87 @@ class ApiService {
           responseContent = insightResponse.data.choices[0].message.content;
           const tokenCount = insightResponse.data.usage?.completion_tokens || 0;
           
-          // Check for truncation signs
-          if (tokenCount < 50 || responseContent.length < 200 || 
-              responseContent.match(/##\s*[^#]+$/) ||  // Ends with a section header with no content
-              (responseContent.includes('## Birth Details') && !responseContent.includes('## Birth Chart Overview'))) {
+          // Check for truncation with enhanced detection
+          if (
+            (tokenCount < 300 && responseContent.length < 1000) || 
+            responseContent.includes("Let me continue") || 
+            responseContent.includes("I'll continue") ||
+            (responseContent.match(/##\s*[^#]+$/) && responseContent.length < 2000) || // Ends with header + little content
+            (responseContent.includes('## Birth Details') && !responseContent.includes('## Birth Chart Overview')) ||
+            (responseContent.includes('## Key Strengths') && !responseContent.includes('## Potential Challenges')) ||
+            insightResponse.data.choices[0].finish_reason === 'length'
+          ) {
+            console.log(`Response appears truncated (${tokenCount} tokens, ${responseContent.length} chars). Retrying with improved prompt.`);
             
-            console.log(`Response appears truncated (${tokenCount} tokens, ${responseContent.length} chars). Retrying with increased token limit.`);
-            maxTokens = Math.min(maxTokens * 2, 8000);  // Double tokens but cap at 8000
+            // For astrological readings, restructure the prompt
+            if (isAstrologyRequest) {
+              // Extract key information
+              const nameMatch = cleanedPrompt.match(/for\s+([^(,\n]+)/i);
+              const birthDetailsMatch = cleanedPrompt.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+              
+              let name = nameMatch ? nameMatch[1].trim() : 'the person';
+              let date = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+              let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
+              let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+              
+              // Extract planet positions if present
+              let planetPositions = '';
+              if (cleanedPrompt.includes('Planet Positions:')) {
+                const planetPositionsMatch = cleanedPrompt.match(/Planet Positions:([\s\S]*?)(?:Include|Section|##|$)/i);
+                if (planetPositionsMatch) {
+                  planetPositions = planetPositionsMatch[1].trim();
+                }
+              }
+              
+              // Create a structured prompt that ensures we get all sections
+              const restructuredPrompt = `Generate a complete astrological reading for ${name} born on ${date} at ${time} in ${place}.`;
+              
+              if (planetPositions) {
+                planetPositions = planetPositions.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+                const cleanedPrompt = `${restructuredPrompt}
+
+Planet Positions:
+${planetPositions}
+
+Include ALL of these sections, each with substantive content:
+1. Birth Details (name, date, time, place)
+2. Birth Chart Overview (clearly state Sun sign, Moon sign, and Ascendant/Lagna)
+3. Ascendant/Lagna analysis
+4. Personality Overview
+5. Career Insights (3 specific insights)
+6. Relationship Patterns (3 insights)
+7. Key Strengths (5 strengths)
+8. Potential Challenges (5 challenges)
+9. Significant Chart Features (5 features)
+
+Use section headers with ## and keep points concise but complete. Format lists with numbered format (1., 2., 3.). Make sure to include ALL sections.`;
+                
+                // Try again with the restructured prompt
+                const retryResponse = await axios.post('/api/together/chat', {
+                  model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                  messages: [
+                    {
+                      role: "system",
+                      content: "You are an expert Vedic astrologer providing complete readings. IMPORTANT: Respond with ALL requested sections in full without truncation. Use ## for section headers. Make every section substantive."
+                    },
+                    {
+                      role: "user",
+                      content: cleanedPrompt
+                    }
+                  ],
+                  temperature: 0.7,
+                  max_tokens: 16000
+                }, {
+                  timeout: 55000
+                });
+                
+                responseContent = retryResponse.data.choices[0].message.content;
+                break;
+              }
+            }
+            
+            // If we get here and haven't succeeded with restructuring, increment and try again
             attempt++;
-            await this.delay(1000);
             continue;
           }
           
@@ -514,9 +589,8 @@ class ApiService {
             throw error;
           }
           
-          // Otherwise increment attempt, increase tokens, and retry
+          // Otherwise increment attempt and retry
           attempt++;
-          maxTokens = Math.min(maxTokens * 2, 8000);
           await this.delay(2000);
         }
       }
@@ -542,22 +616,62 @@ class ApiService {
       if (error.message && (error.message.includes('timeout') || error.response?.status === 504 || error.message.includes('FUNCTION_INVOCATION_TIMEOUT'))) {
         console.log('Request timed out. Retrying with simpler prompt...');
         
-        // Create a simpler version of the prompt that focuses on just key aspects
-        let simplifiedPrompt = `${prompt.split('.')[0]}.`;
+        // Create a better version of the prompt for astrological readings
+        let restructuredPrompt = prompt;
         
-        // If prompt is a complex astrological reading, ensure we still have structure
-        if (prompt.includes('astrological reading')) {
-          simplifiedPrompt = `Generate a detailed astrological reading for ${prompt.includes('for') ? prompt.split('for')[1].split('born')[0].trim() : 'the person'} ${prompt.includes('born') ? 'born' + prompt.split('born')[1].split('.')[0] : ''}.
+        // If prompt is a complex astrological reading, create a more structured prompt
+        if (prompt.includes('astrological reading') || prompt.includes('birth chart') || prompt.includes('Planet Positions:')) {
+          // Extract key information
+          const nameMatch = prompt.match(/for\s+([^(,\n]+)/i);
+          const birthDetailsMatch = prompt.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+          
+          let name = nameMatch ? nameMatch[1].trim() : 'the person';
+          let date = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+          let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
+          let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+          
+          // Extract planet positions if present
+          let planetPositions = '';
+          if (prompt.includes('Planet Positions:')) {
+            const planetPositionsMatch = prompt.match(/Planet Positions:([\s\S]*?)(?:Include|Section|##|$)/i);
+            if (planetPositionsMatch) {
+              planetPositions = planetPositionsMatch[1].trim();
+            }
+          }
+          
+          // Create clear, direct prompt
+          restructuredPrompt = `Generate a complete astrological reading for ${name} born on ${date} at ${time} in ${place}.`;
+          
+          if (planetPositions) {
+            planetPositions = planetPositions.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+            restructuredPrompt += `\n\nPlanet Positions:\n${planetPositions}`;
+          }
+          
+          restructuredPrompt += `\n\nInclude ALL of these sections, each with substantive content:
+1. Birth Details (name, date, time, place)
+2. Birth Chart Overview (clearly state Sun sign, Moon sign, and Ascendant/Lagna)
+3. Ascendant/Lagna analysis
+4. Personality Overview
+5. Career Insights (3 specific insights)
+6. Relationship Patterns (3 insights)
+7. Key Strengths (5 strengths)
+8. Potential Challenges (5 challenges)
+9. Significant Chart Features (5 features)
 
-Include birth details, birth chart overview, personality traits, career options (3), relationship patterns (3), key strengths (5), challenges (5), and significant chart features.
-
-Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
+Use section headers with ## and keep points concise but complete. Format lists with numbered format (1., 2., 3.). Make sure to include ALL sections.`;
+        } else {
+          // For non-astrological queries, simplify but keep core request
+          restructuredPrompt = prompt.split('.').slice(0, 3).join('.') + '.';
+          if (restructuredPrompt.length < 50) {
+            restructuredPrompt = prompt; // Use original if simplified version is too short
+          }
         }
         
-        // Clean the simplified prompt if it's an astrological request
-        const isAstrologyRetry = simplifiedPrompt.includes('astrological reading') ||
-                                simplifiedPrompt.includes('birth chart');
-        const cleanedSimplifiedPrompt = isAstrologyRetry ? this.cleanAstrologyPrompt(simplifiedPrompt) : simplifiedPrompt;
+        // Clean the restructured prompt if needed
+        const isAstrologyRetry = restructuredPrompt.includes('astrological reading') ||
+                              restructuredPrompt.includes('birth chart') ||
+                              restructuredPrompt.includes('Planet Positions:');
+        const cleanedPrompt = isAstrologyRetry ? this.cleanAstrologyPrompt(restructuredPrompt) : restructuredPrompt;
         
         try {
           const retryResponse = await axios.post('/api/together/chat', {
@@ -565,17 +679,17 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
             messages: [
               {
                 role: "system",
-                content: "You are an expert Vedic astrologer.  Always use ## prefix for section headers and never use bold formatting or asterisks for headers."
+                content: "You are an expert Vedic astrologer. Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content. Always use ## prefix for section headers."
               },
               {
                 role: "user",
-                content: cleanedSimplifiedPrompt
+                content: cleanedPrompt
               }
             ],
             temperature: 0.7,
-            max_tokens: 10000  // Significantly reduced token limit for timeout recovery
+            max_tokens: 16000  // Maximum token limit to avoid truncation
           }, {
-            timeout: 25000,  // Shorter timeout for recovery attempt
+            timeout: 55000,  // Increased timeout for more complete responses
             headers: {
               'Content-Type': 'application/json',
               'X-Request-Type': 'simplified-insight',
