@@ -195,36 +195,18 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
           const birthDetails = extractBirthDetails();
           
           if (birthDetails) {
-            console.log('Fetching Vedic chart data with birth details:', birthDetails);
+            console.log('Using birth details:', birthDetails);
             
             // Clear any previous error
             setErrorMessage(null);
             
-            try {
-              // Get Vedic chart data from API (with caching)
-              const data = await api.getVedicChartData(birthDetails);
-              
-              // Set the Vedic data
-              setVedicData(data);
-              
-              // Determine if this is real API data or mock data
-              // We're checking a unique property that would only exist in mock data
-              const isMockData = 
-                data.birthChart.planets.some(p => p.id === 'sun' && p.sign === 9 && p.house === 9 && p.degree === 15.5) &&
-                data.dashas.currentMahadasha.planet === 'Saturn' &&
-                data.dashas.currentMahadasha.startDate === '2019-04-12';
-                
-              setDataSource(isMockData ? 'mock' : 'cached');
-              console.log('Data source identified as:', isMockData ? 'mock' : 'api/cached');
-              
-              // Mark data as loaded to prevent duplicate API calls
-              dataLoadedRef.current = true;
-            } catch (error) {
-              console.error('API error fetching Vedic chart data:', error);
-              setErrorMessage('Unable to generate astrological data. Using sample data instead.');
-              setVedicData(mockVedicData);
-              setDataSource('mock');
-            }
+            // For now, until we implement the API functionality properly,
+            // use mock data since getVedicChartData doesn't exist
+            setVedicData(mockVedicData);
+            setDataSource('mock');
+            
+            // Mark data as loaded to prevent duplicate API calls
+            dataLoadedRef.current = true;
           } else {
             console.log('Could not extract birth details, using mock data');
             setErrorMessage('Could not determine birth details from the reading. Using sample data instead.');
@@ -478,6 +460,13 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                   const ascendantMatch = insight.message.match(/## Ascendant\/Lagna([\s\S]*?)(?=##|$)/);
                   const ascendantText = ascendantMatch ? ascendantMatch[1].trim() : '';
                   
+                  console.log('Ascendant text extracted:', ascendantText);
+                  
+                  // Only render this section if we have ascendant content
+                  if (!ascendantText) {
+                    return null;
+                  }
+                  
                   // Determine the ascendant sign from text
                   let ascendantSign = '♌'; // Default to Leo
                   
@@ -499,7 +488,7 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                   
                   // Find the sign from the ascendant text
                   let signColor = '#FF9800';
-                  let ascendantDescription = "Your rising sign represents how others perceive you.";
+                  let ascendantDescription = ascendantText;
                   
                   for (const sign of signNames) {
                     if (ascendantText.toLowerCase().includes(sign.name.toLowerCase())) {
@@ -620,77 +609,94 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                   const relationshipMatch = insight.message.match(/## Relationship Patterns([\s\S]*?)(?=##|$)/);
                   const relationshipText = relationshipMatch ? relationshipMatch[1].trim() : '';
                   
-                  // Split and clean bullet points with improved parsing
+                  // Improved parsing for numbered lists and bullet points
                   const parsePoints = (text: string): string[] => {
                     if (!text) return [];
                     
-                    // Clean up the text first - remove line numbers and dashes that might be incorrectly formatted
-                    let cleanedText = text.replace(/^\d+\s*-?\s*/gm, '') // Remove line numbers and dashes at start of lines
-                                         .replace(/\n\s*-\s*/g, '\n')    // Remove dashes after line breaks
-                                         .replace(/\n\d+\s*/g, '\n');    // Remove lone numbers at start of lines
+                    // Log the raw text for debugging
+                    console.log('Parsing text:', text);
                     
-                    // First, try to identify title-description pairs (format: "Title: Description")
-                    const titleDescriptionRegex = /([^:]+):\s*([^:]+)(?=\n|$)/g;
-                    const matches = Array.from(cleanedText.matchAll(titleDescriptionRegex));
+                    // Check for numbered list format (1., 2., 3., etc.)
+                    const numberedListRegex = /\d+\.\s*([^\n]+)/g;
+                    const numberedMatches = Array.from(text.matchAll(numberedListRegex));
                     
-                    if (matches.length > 0) {
-                      return matches.map(match => {
-                        const title = match[1].trim();
-                        const description = match[2].trim();
-                        return `${title}: ${description}`;
-                      });
+                    if (numberedMatches && numberedMatches.length > 0) {
+                      console.log('Found numbered list with', numberedMatches.length, 'items');
+                      return numberedMatches.map(match => match[1].trim());
                     }
                     
-                    // If we didn't find title-description pairs, fall back to other methods
+                    // If no numbered list found, try to split paragraphs
+                    // Clean up the text first
+                    let cleanedText = text
+                      .replace(/^\d+\s*-?\s*/gm, '') // Remove leading numbers and dashes
+                      .replace(/\n\s*-\s*/g, '\n')   // Remove dashes after line breaks
+                      .replace(/\n\d+\s*/g, '\n');   // Remove numbers at line starts
                     
-                    // Check if we have numbered points (1., 2., 3., etc.)
-                    if (/\d+\./.test(cleanedText)) {
-                      return cleanedText.split(/\d+\.\s*/)
-                        .filter(point => point.trim().length > 0)
-                        .map(point => point.trim());
+                    // Check if there are distinct paragraphs
+                    const paragraphs = cleanedText.split(/\n\s*\n/).filter((p: string) => p.trim().length > 0);
+                    if (paragraphs.length > 1) {
+                      console.log('Found multiple paragraphs:', paragraphs.length);
+                      return paragraphs.map((p: string) => p.trim());
                     }
                     
-                    // Handle case where multiple bullet points are on a single line
+                    // If it's just one paragraph, check for bullet points or similar markers
                     if (cleanedText.includes('*')) {
-                      return cleanedText.split('*')
-                        .filter(point => point.trim().length > 0)
-                        .map(point => point.trim());
+                      const bulletPoints = cleanedText.split('*').filter((p: string) => p.trim().length > 0);
+                      return bulletPoints.map((p: string) => p.trim());
                     }
                     
-                    // Handle case where multiple bullet points use the • character
                     if (cleanedText.includes('•')) {
-                      return cleanedText.split('•')
-                        .filter(point => point.trim().length > 0)
-                        .map(point => point.trim());
+                      const bulletPoints = cleanedText.split('•').filter((p: string) => p.trim().length > 0);
+                      return bulletPoints.map((p: string) => p.trim());
                     }
                     
-                    // Default case: split by line breaks and look for dash prefixes
-                    return cleanedText.split('\n')
-                      .filter(line => line.trim().length > 0)
-                      .map(line => line.trim().replace(/^-\s*/, ''));
+                    if (cleanedText.includes('-')) {
+                      const dashPoints = cleanedText.split('-').filter((p: string) => p.trim().length > 0);
+                      // Only use dash splitting if we find multiple items
+                      if (dashPoints.length > 1) {
+                        return dashPoints.map((p: string) => p.trim());
+                      }
+                    }
+                    
+                    // If we can't find any structured format, split by sentences
+                    // This is a last resort for free-form text
+                    const sentences = cleanedText.split(/\.\s+/).filter(s => s.trim().length > 0);
+                    if (sentences.length > 1) {
+                      return sentences.map(s => s.trim() + '.');
+                    }
+                    
+                    // If all else fails, just return the whole text as one point
+                    return [cleanedText.trim()];
                   };
                   
                   // Process the points
                   const careerPoints = parsePoints(careerText);
                   const relationshipPoints = parsePoints(relationshipText);
                   
+                  console.log('Career points extracted:', careerPoints);
+                  console.log('Relationship points extracted:', relationshipPoints);
+                  
                   // If both sections are empty, don't display the card
                   if (careerPoints.length === 0 && relationshipPoints.length === 0) {
                     return null;
                   }
                   
-                  // Use placeholder data only if the API didn't return any content
-                  const finalCareerPoints = careerPoints.length > 0 ? careerPoints : [
-                    "10th house in Sagittarius suggests a career path requiring knowledge, travel, or teaching",
-                    "Jupiter's placement indicates success in fields related to communication or publishing",
-                    "Saturn aspects suggest career stability after age 35 with authority positions",
-                  ];
+                  // Ensure we have exactly 3 points for each section
+                  const finalCareerPoints = careerPoints.length > 0 
+                    ? (careerPoints.length >= 3 ? careerPoints.slice(0, 3) : [...careerPoints, ...Array(3 - careerPoints.length).fill("Additional career insights available with premium access")]) 
+                    : [
+                        "10th house in Sagittarius suggests a career path requiring knowledge, travel, or teaching",
+                        "Jupiter's placement indicates success in fields related to communication or publishing",
+                        "Saturn aspects suggest career stability after age 35 with authority positions",
+                      ];
                   
-                  const finalRelationshipPoints = relationshipPoints.length > 0 ? relationshipPoints : [
-                    "Venus in the 7th house indicates an attractive partner with artistic sensibilities",
-                    "Mars square Venus suggests passionate relationships with occasional conflicts",
-                    "Moon's position shows emotional needs for security and nurturing in partnerships",
-                  ];
+                  const finalRelationshipPoints = relationshipPoints.length > 0 
+                    ? (relationshipPoints.length >= 3 ? relationshipPoints.slice(0, 3) : [...relationshipPoints, ...Array(3 - relationshipPoints.length).fill("Additional relationship insights available with premium access")]) 
+                    : [
+                        "Venus in the 7th house indicates an attractive partner with artistic sensibilities",
+                        "Mars square Venus suggests passionate relationships with occasional conflicts",
+                        "Moon's position shows emotional needs for security and nurturing in partnerships",
+                      ];
                   
                   return (
                     <motion.div 
@@ -1294,79 +1300,75 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                   );
                 })()}
                 
-                {/* Significant Chart Features Dashboard */}
+                {/* Significant Chart Features */}
                 {(() => {
                   // Extract Significant Chart Features section
                   const chartFeaturesMatch = insight.message.match(/## Significant Chart Features([\s\S]*?)(?=##|$)/);
                   const chartFeaturesText = chartFeaturesMatch ? chartFeaturesMatch[1].trim() : '';
                   
-                  // Use the same parsing logic for consistent results
-                  const parsePoints = (text: string): string[] => {
+                  console.log('Chart features text extracted:', chartFeaturesText);
+                  
+                  // Use the same improved parsing function from Career & Relationships section
+                  const parsePointsImproved = (text: string): string[] => {
                     if (!text) return [];
                     
-                    // Clean up the text first - remove line numbers and dashes that might be incorrectly formatted
-                    let cleanedText = text.replace(/^\d+\s*-?\s*/gm, '') // Remove line numbers and dashes at start of lines
-                                         .replace(/\n\s*-\s*/g, '\n')    // Remove dashes after line breaks
-                                         .replace(/\n\d+\s*/g, '\n');    // Remove lone numbers at start of lines
+                    // Check for numbered list format (1., 2., 3., etc.)
+                    const numberedListRegex = /\d+\.\s*([^\n]+)/g;
+                    const numberedMatches = Array.from(text.matchAll(numberedListRegex));
                     
-                    // First, try to identify title-description pairs (format: "Title: Description")
-                    const titleDescriptionRegex = /([^:]+):\s*([^:]+)(?=\n|$)/g;
-                    const matches = Array.from(cleanedText.matchAll(titleDescriptionRegex));
-                    
-                    if (matches.length > 0) {
-                      return matches.map(match => {
-                        const title = match[1].trim();
-                        const description = match[2].trim();
-                        return `${title}: ${description}`;
-                      });
+                    if (numberedMatches && numberedMatches.length > 0) {
+                      return numberedMatches.map(match => match[1].trim());
                     }
                     
-                    // Check if we have numbered points (1., 2., 3., etc.)
-                    if (/\d+\./.test(cleanedText)) {
-                      return cleanedText.split(/\d+\.\s*/)
-                        .filter(point => point.trim().length > 0)
-                        .map(point => point.trim());
+                    // If no numbered list found, split by paragraphs or bullet points
+                    let cleanedText = text
+                      .replace(/^\d+\s*-?\s*/gm, '')
+                      .replace(/\n\s*-\s*/g, '\n')
+                      .replace(/\n\d+\s*/g, '\n');
+                    
+                    // Try to split by paragraphs first
+                    const paragraphs = cleanedText.split(/\n\s*\n/).filter((p: string) => p.trim().length > 0);
+                    if (paragraphs.length > 1) {
+                      return paragraphs.map((p: string) => p.trim());
                     }
                     
-                    // Handle case where multiple bullet points are on a single line
+                    // Check for bullet markers
                     if (cleanedText.includes('*')) {
-                      return cleanedText.split('*')
-                        .filter(point => point.trim().length > 0)
-                        .map(point => point.trim());
+                      const bullets = cleanedText.split('*').filter((p: string) => p.trim().length > 0);
+                      return bullets.map((p: string) => p.trim());
                     }
                     
-                    // Handle case where multiple bullet points use the • character
                     if (cleanedText.includes('•')) {
-                      return cleanedText.split('•')
-                        .filter(point => point.trim().length > 0)
-                        .map(point => point.trim());
+                      const bullets = cleanedText.split('•').filter((p: string) => p.trim().length > 0);
+                      return bullets.map((p: string) => p.trim());
                     }
                     
-                    // Default case: split by line breaks and look for dash prefixes
-                    return cleanedText.split('\n')
-                      .filter(line => line.trim().length > 0)
-                      .map(line => line.trim().replace(/^-\s*/, ''));
+                    if (cleanedText.includes('-')) {
+                      const dashes = cleanedText.split('-').filter((p: string) => p.trim().length > 0);
+                      if (dashes.length > 1) {
+                        return dashes.map((p: string) => p.trim());
+                      }
+                    }
+                    
+                    // Last resort: split by sentences
+                    const sentences = cleanedText.split(/\.\s+/).filter((s: string) => s.trim().length > 0);
+                    if (sentences.length > 1) {
+                      return sentences.map((s: string) => s.trim() + '.');
+                    }
+                    
+                    // If all else fails, return the whole text as one item
+                    return [cleanedText.trim()];
                   };
                   
-                  const chartFeaturePoints = parsePoints(chartFeaturesText);
+                  const chartFeaturePoints = parsePointsImproved(chartFeaturesText);
                   
-                  // Flatten sub-points to create a single array of all points
-                  let allChartFeaturePoints: string[] = [];
-                  chartFeaturePoints.forEach(point => {
-                    // Check if the point itself contains bullet characters
-                    if (point.includes('•') || point.includes('*')) {
-                      const subPoints = point.split(/•|\*/).filter(p => p.trim().length > 0);
-                      allChartFeaturePoints = [...allChartFeaturePoints, ...subPoints.map(sp => sp.trim())];
-                    } else {
-                      allChartFeaturePoints.push(point.trim());
-                    }
-                  });
+                  console.log('Chart feature points extracted:', chartFeaturePoints);
                   
                   // Limit visible points to first 2
-                  const visiblePoints = allChartFeaturePoints.slice(0, 2);
+                  const visiblePoints = chartFeaturePoints.slice(0, 2);
                   // Check if there are more points that could be unlocked
-                  const hasMorePoints = allChartFeaturePoints.length > 2;
-                  const lockedPointsCount = allChartFeaturePoints.length - 2;
+                  const hasMorePoints = chartFeaturePoints.length > 2;
+                  const lockedPointsCount = chartFeaturePoints.length - 2;
                   
                   return (
                     <motion.div 
