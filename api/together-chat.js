@@ -146,6 +146,17 @@ export default async function handler(req, res) {
     // Check first 500 chars of message for debugging
     console.log('Message excerpt:', userMsg.substring(0, 500));
 
+    // Enhanced debugging: Check for newlines and escape sequences
+    const hasNewlines = userMsg.includes('\n');
+    const hasEscapedNewlines = userMsg.includes('\\n');
+    console.log(`Message format check: Contains raw newlines: ${hasNewlines}, Contains escaped newlines: ${hasEscapedNewlines}`);
+    
+    if (hasNewlines) {
+      console.log('Sample lines from message:');
+      const firstFewLines = userMsg.split('\n').slice(0, 3);
+      firstFewLines.forEach((line, i) => console.log(`Line ${i+1}: ${line.substring(0, 100)}`));
+    }
+
     // Test patterns on the message content
     const degreeMatch = userMsg.match(degreePattern);
     const longitudeMatch = userMsg.match(longitudePattern);
@@ -178,66 +189,62 @@ export default async function handler(req, res) {
       // Clean up each message
       requestData.messages = requestData.messages.map(msg => {
         if (msg.role === 'user') {
-          // Extract birth details for better formatting
-          const nameMatch = msg.content.match(/for\s+([^(,\n]+)/i);
-          const birthDetailsMatch = msg.content.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+          console.log('💫 Starting to clean astrological request...');
           
-          const name = nameMatch ? nameMatch[1].trim() : 'the person';
-          const birthDate = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
-          const birthTime = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
-          const birthPlace = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+          // Step 1: Replace all escaped newlines with spaces, but keep actual newlines
+          // This preserves the structure of the original message
+          let cleanedContent = msg.content.replace(/\\n/g, '\n');
+          console.log(`Escaped newline replacement: Replaced ${(msg.content.match(/\\n/g) || []).length} escaped newlines`);
           
-          // Parse planet positions - extract just the planets and signs without coordinates
-          const planetLines = msg.content.split('\n').filter(line => 
-            line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
-          );
+          // Step 2: Remove coordinates using regex patterns - keep the original structure
+          // Pattern for "at X.Y°" format
+          const atDegreePattern = /\s+at\s+\d+\.\d+°/g;
+          // Pattern for "at X.Y" format without degree symbol
+          const atDecimalPattern = /\s+at\s+\d+\.\d+(?!\w)/g;
+          // Pattern for standalone coordinates
+          const standaloneCoordinatePattern = /\s+\d+\.\d+°(?!\w)/g;
+          // Pattern for degrees in parentheses
+          const parenthesesPattern = /\s*\(\s*\d+\.\d+[°\s]*\)/g;
+          // Pattern for retrograde in parentheses with coordinates
+          const retrogradeCoordPattern = /\s*\(\s*\d+\.\d+[°\s]*,?\s*Retrograde\s*\)/gi;
           
-          // Log found planet lines for debugging
-          console.log(`Found ${planetLines.length} planet lines to process`);
-          if (planetLines.length > 0) {
-            console.log('First planet line sample:', planetLines[0]);
+          // Count matches for logging
+          const atDegreeMatches = (cleanedContent.match(atDegreePattern) || []).length;
+          const atDecimalMatches = (cleanedContent.match(atDecimalPattern) || []).length;
+          const standaloneMatches = (cleanedContent.match(standaloneCoordinatePattern) || []).length;
+          const parenthesesMatches = (cleanedContent.match(parenthesesPattern) || []).length;
+          
+          console.log(`Found coordinate patterns: ${atDegreeMatches} 'at X.Y°', ${atDecimalMatches} 'at X.Y', ${standaloneMatches} standalone coordinates, ${parenthesesMatches} in parentheses`);
+          
+          // Replace retrograde coordinates while preserving retrograde status
+          cleanedContent = cleanedContent.replace(retrogradeCoordPattern, ' (Retrograde)');
+          
+          // Remove all other coordinates
+          cleanedContent = cleanedContent
+            .replace(atDegreePattern, '')
+            .replace(atDecimalPattern, '')
+            .replace(standaloneCoordinatePattern, '')
+            .replace(parenthesesPattern, '')
+            // Clean general degree pattern (planet/sign followed by degrees)
+            .replace(/([A-Za-z]+)\s+\d+\.\d+°/g, '$1')
+            // Clean any decimal followed by degree symbol
+            .replace(/\d+\.\d+°/g, '');
+            
+          console.log('✨ Cleaned prompt - coordinates removed while preserving structure');
+          console.log(`🔄 Original length: ${msg.content.length} chars → Cleaned length: ${cleanedContent.length} chars`);
+          
+          // Final check for any remaining coordinates that might have been missed
+          const remainingCoords = cleanedContent.match(/\d+\.\d+°/g);
+          if (remainingCoords) {
+            console.log(`⚠️ Warning: Found ${remainingCoords.length} remaining coordinates after cleaning. Will remove these.`);
+            cleanedContent = cleanedContent.replace(/\d+\.\d+°/g, '');
+            console.log(`Final cleanup: Removed ${remainingCoords.length} additional coordinates`);
           }
           
-          // Format planet positions without coordinates - using improved patterns
-          let cleanedPlanets = '';
-          cleanedPlanets = planetLines.map(line => {
-            // Improved regex to handle multiple formats
-            const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:[\s:]*(?:at|longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*)?(\s+\(Retrograde\))?/i);
-            
-            if (match) {
-              const planetName = match[1].trim();
-              const signName = match[2].trim();
-              const retrograde = match[3] ? ' (Retrograde)' : '';
-              
-              return `${planetName}: ${signName}${retrograde}`;
-            }
-            
-            // If the regex didn't match, try a more aggressive cleanup
-            return line
-              .replace(/\s+at\s+\d+\.\d+[°\s]*/g, '') // Remove "at" format coordinates
-              .replace(/[\s:]*(?:longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*/g, '') // Remove longitude/degree mentions
-              .replace(/\s+\d+\.\d+[°\s]*/g, '') // Remove any remaining decimal numbers with degree symbols
-              .replace(/:\s+/, ': ') // Standardize spacing after colon
-              .trim();
-          }).join('   ');
-          
-          // Get section headers from the original content
-          const sectionMatch = msg.content.match(/Include the following sections[^:]*:([^]*?)(?:For lists|$)/i);
-          const sectionHeaders = sectionMatch ? sectionMatch[1].trim()
-            .split('\n')
-            .filter(line => line.trim().length > 0)
-            .map(line => line.trim())
-            .join('   ') 
-            : 'Birth Details: Date, Time, Place, Name   Birth Chart Overview: Brief overview   Ascendant/Lagna: Information   Personality Overview: Analysis   Career Insights: 3 specific insights   Relationship Patterns: 3 insights   Key Strengths: 5 primary strengths   Potential Challenges: 5 potential difficulties   Significant Chart Features: 5 notable configurations';
-          
-          // Format list instructions
-          const listFormatMatch = msg.content.match(/For lists[^.]*\.(.*?)(?:$|Keep points)/i);
-          const listFormat = listFormatMatch ? listFormatMatch[1].trim() : 'Use numbered format (1., 2., 3.).';
-          
-          // Create a clean optimized prompt
-          const cleanedContent = `Generate a comprehensive astrological reading for ${name} born on ${birthDate} at ${birthTime} in ${birthPlace}.   Planet Positions:   ${cleanedPlanets}   Include the following sections:   ${sectionHeaders}   ${listFormat} Keep points concise but meaningful. Focus on concrete insights.`;
-          
-          console.log('Cleaned prompt format:', cleanedContent.substring(0, 100) + '...');
+          // Sample the cleaned content for verification
+          console.log('Sample of cleaned content:');
+          const sampleLines = cleanedContent.split('\n').slice(0, 5);
+          sampleLines.forEach((line, i) => console.log(`Line ${i+1}: ${line.substring(0, 100)}`));
           
           return {
             ...msg,
@@ -247,10 +254,7 @@ export default async function handler(req, res) {
         return msg;
       });
       
-      // Set a more appropriate max_tokens for reliability
-      requestData.max_tokens = 5000;
-      
-      console.log('Successfully cleaned pre-formatted astrological request.');
+      console.log('🎉 Successfully cleaned pre-formatted astrological request.');
     }
     
     // Detect complex astrological reading requests and optimize the prompt format
