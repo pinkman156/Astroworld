@@ -433,14 +433,20 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
     return 'Your unique cosmic gifts';
   };
   
-  const randomStrength = extractStrength();
+  const randomStrength = extractStrength().replace(/\d+\s*\.?\s*$/, '').trim();
   console.log('Random strength:', randomStrength);
   
-  // Process the strength text to handle quoted content
+  // Process the strength text to handle quoted content and clean any numbers/digits
   const processStrengthText = (text: string) => {
-    if (text.includes('"')) {
+    // Clean any digits, trailing numbers, or numbered bullets
+    let cleanedText = text.replace(/\d+\s*\.?\s*$/, '') // Remove trailing numbers
+                          .replace(/^\d+\s*\.\s*/, '') // Remove leading numbers
+                          .replace(/\s\d+\s*\.\s*/g, ' ') // Remove in-text numbered bullets
+                          .trim();
+    
+    if (cleanedText.includes('"')) {
       // Extract the content inside quotes to make bold
-      const parts = text.split('"');
+      const parts = cleanedText.split('"');
       if (parts.length >= 3) {
         return (
           <>
@@ -452,15 +458,21 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
         );
       }
     }
-    return text;
+    return cleanedText;
   };
 
   // Get plain text version of the strength (without quotes) for sharing
   const getPlainStrength = (text: string) => {
-    if (text.includes('"')) {
-      return text.replace(/"/g, '');
+    // Clean any digits or numbered bullets
+    let cleanedText = text.replace(/\d+\s*\.?\s*$/, '') // Remove trailing numbers
+                          .replace(/^\d+\s*\.\s*/, '') // Remove leading numbers
+                          .replace(/\s\d+\s*\.\s*/g, ' ') // Remove in-text numbered bullets
+                          .trim();
+    
+    if (cleanedText.includes('"')) {
+      return cleanedText.replace(/"/g, '');
     }
-    return text;
+    return cleanedText;
   };
   
   // Add Twitter sharing functionality
@@ -798,30 +810,37 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                 {/* Sign Info with Psychedelic Color Accents */}
                 <Box sx={{ 
                   px: 3, 
-                  py: 1.5, // Reduced vertical padding
+                  py: 2, // Increased vertical padding
                   display: 'flex',
                   justifyContent: 'space-around',
-                  mb: 1.5, // Reduced bottom margin
-                  zIndex: 5
+                  mb: 2, // Increased bottom margin
+                  zIndex: 5,
+                  gap: 2 // Add gap between elements
                 }}>
                   <Box sx={{ 
                     display: 'flex', 
                     flexDirection: 'column',
                     alignItems: 'center',
-                    backgroundColor: 'rgba(0,0,0,0.25)',
+                    backgroundColor: 'rgba(0,0,0,0.3)',
                     borderRadius: '12px',
-                    px: 3,
-                    py: 1.5,
-                    border: '1px solid rgba(255,218,121,0.15)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                    px: 3.5,
+                    py: 1.8,
+                    border: '1px solid rgba(255,218,121,0.25)',
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.2), inset 0 1px 2px rgba(255,218,121,0.1)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      boxShadow: '0 8px 20px rgba(0,0,0,0.3), inset 0 1px 3px rgba(255,218,121,0.2)',
+                      border: '1px solid rgba(255,218,121,0.35)',
+                    }
                   }}>
                     <Typography sx={{ 
                       color: 'white', 
                       fontWeight: 600, 
-                      fontSize: '1.1rem',
-                      textShadow: '0 0 8px rgba(255,193,7,0.4)'
+                      fontSize: '1.15rem',
+                      textShadow: '0 0 10px rgba(255,193,7,0.5)',
+                      letterSpacing: '0.03em'
                     }}>
-                      Sun - {displaySunSign}
+                      Sun {displaySunSign}
                     </Typography>
                   </Box>
                   
@@ -829,20 +848,26 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                     display: 'flex', 
                     flexDirection: 'column',
                     alignItems: 'center',
-                    backgroundColor: 'rgba(0,0,0,0.25)',
+                    backgroundColor: 'rgba(0,0,0,0.3)',
                     borderRadius: '12px',
-                    px: 3,
-                    py: 1.5,
-                    border: '1px solid rgba(120,160,255,0.15)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                    px: 3.5,
+                    py: 1.8,
+                    border: '1px solid rgba(120,160,255,0.25)',
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.2), inset 0 1px 2px rgba(120,160,255,0.1)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      boxShadow: '0 8px 20px rgba(0,0,0,0.3), inset 0 1px 3px rgba(120,160,255,0.2)',
+                      border: '1px solid rgba(120,160,255,0.35)',
+                    }
                   }}>
                     <Typography sx={{ 
                       color: 'white', 
                       fontWeight: 600, 
-                      fontSize: '1.1rem',
-                      textShadow: '0 0 8px rgba(120,160,255,0.5)'
+                      fontSize: '1.15rem',
+                      textShadow: '0 0 10px rgba(120,160,255,0.5)',
+                      letterSpacing: '0.03em'
                     }}>
-                      Moon - {displayMoonSign}
+                      Moon {displayMoonSign}
                     </Typography>
                   </Box>
                 </Box>
@@ -859,12 +884,12 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                   zIndex: 5,
                   overflowY: 'auto' // Add overflow so content can scroll if needed
                 }}>
-                  {/* Cosmic Insight Box with Psychedelic Border */}
+                  {/* Cosmic Insight Box with Enhanced Psychedelic Border */}
                   <Box sx={{ 
                     position: 'relative',
                     width: '100%',
-                    mb: 2, // Reduced bottom margin
-                    p: 0.5,
+                    mb: 2.5, // Increased bottom margin
+                    p: 0.6, // Slightly thicker border
                     borderRadius: 4,
                     backgroundColor: isCapturing ? 'rgba(255,193,7,0.3)' : undefined,
                     ...(isCapturing ? {} : {
@@ -879,23 +904,23 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                     })
                   }}>
                     <Box sx={{ 
-                      bgcolor: 'rgba(30, 20, 40, 0.85)', 
+                      bgcolor: 'rgba(25, 15, 35, 0.9)', // Darker background for better contrast
                       borderRadius: 3.5,
-                      p: 2, // Reduced padding
-                      boxShadow: isCapturing ? 'none' : 'inset 0 2px 10px rgba(0,0,0,0.3)',
+                      p: 2.5, // More padding
+                      boxShadow: isCapturing ? 'none' : 'inset 0 2px 12px rgba(0,0,0,0.4)',
                       backdropFilter: isCapturing ? 'none' : 'blur(4px)'
                     }}>
                       <Typography 
                         variant="h6" 
                         component="div"
                         sx={{ 
-                          color: 'rgba(255,218,121,0.9)', 
+                          color: 'rgba(255,218,121,0.95)', 
                           fontWeight: 700, 
-                          mb: 0.5, // Reduced bottom margin
-                          letterSpacing: '0.1em',
+                          mb: 1, // Increased bottom margin
+                          letterSpacing: '0.12em',
                           textTransform: 'uppercase',
                           fontSize: '0.9rem',
-                          textShadow: '0 0 8px rgba(255,193,7,0.4)',
+                          textShadow: '0 0 10px rgba(255,193,7,0.5)',
                           fontFamily: '"Courier New", Courier, monospace'
                         }}
                       >
@@ -906,10 +931,11 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                         sx={{ 
                           color: 'white', 
                           fontWeight: 400,
-                          fontSize: '0.95rem', // Slightly smaller text
+                          fontSize: '1rem', // Increased text size slightly
                           fontStyle: 'italic',
-                          lineHeight: 1.4, // Reduced line height
-                          textShadow: '0 0 5px rgba(0,0,0,0.5)'
+                          lineHeight: 1.5, // Improved line height
+                          textShadow: '0 0 5px rgba(0,0,0,0.5)',
+                          letterSpacing: '0.02em' // Slight letter spacing for readability
                         }}
                       >
                         "{personalityText}"
@@ -917,12 +943,12 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                     </Box>
                   </Box>
                   
-                  {/* Superpower Box with Psychedelic Border */}
+                  {/* Superpower Box with Enhanced Psychedelic Border */}
                   <Box sx={{ 
                     position: 'relative',
                     width: '100%',
-                    mb: 2, // Reduced bottom margin
-                    p: 0.5,
+                    mb: 2.5, // Increased bottom margin
+                    p: 0.6, // Slightly thicker border
                     borderRadius: 4,
                     backgroundColor: isCapturing ? 'rgba(229,57,53,0.3)' : undefined,
                     ...(isCapturing ? {} : {
@@ -932,23 +958,23 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                     })
                   }}>
                     <Box sx={{ 
-                      bgcolor: 'rgba(30, 20, 40, 0.85)', 
+                      bgcolor: 'rgba(25, 15, 35, 0.9)', // Darker background for better contrast
                       borderRadius: 3.5,
-                      p: 2, // Reduced padding
-                      boxShadow: isCapturing ? 'none' : 'inset 0 2px 10px rgba(0,0,0,0.3)',
+                      p: 2.5, // More padding
+                      boxShadow: isCapturing ? 'none' : 'inset 0 2px 12px rgba(0,0,0,0.4)',
                       backdropFilter: isCapturing ? 'none' : 'blur(4px)'
                     }}>
                       <Typography 
                         variant="h6" 
                         component="div"
                         sx={{ 
-                          color: 'rgba(229,57,53,0.9)', 
+                          color: 'rgba(229,57,53,0.95)', 
                           fontWeight: 700, 
-                          mb: 0.5, // Reduced bottom margin
-                          letterSpacing: '0.1em',
+                          mb: 1, // Increased bottom margin
+                          letterSpacing: '0.12em',
                           textTransform: 'uppercase',
                           fontSize: '0.9rem',
-                          textShadow: '0 0 8px rgba(229,57,53,0.4)',
+                          textShadow: '0 0 10px rgba(229,57,53,0.5)',
                           fontFamily: '"Courier New", Courier, monospace'
                         }}
                       >
@@ -959,9 +985,10 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                         sx={{ 
                           color: 'white', 
                           fontWeight: 500, 
-                          fontSize: '1rem', // Slightly smaller text
-                          lineHeight: 1.4, // Reduced line height
-                          textShadow: '0 0 5px rgba(0,0,0,0.5)'
+                          fontSize: '1.05rem', // Slightly larger text
+                          lineHeight: 1.5, // Improved line height
+                          textShadow: '0 0 5px rgba(0,0,0,0.5)',
+                          letterSpacing: '0.02em' // Slight letter spacing for readability
                         }}
                       >
                         {processStrengthText(randomStrength)}
