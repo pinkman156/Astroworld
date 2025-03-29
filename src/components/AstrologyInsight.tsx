@@ -657,9 +657,9 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                     return null;
                   }
                   
-                  // Ensure we have exactly 3 points for each section
+                  // Use all career and relationship points without limitation
                   const finalCareerPoints = careerPoints.length > 0 
-                    ? (careerPoints.length >= 3 ? careerPoints.slice(0, 3) : [...careerPoints, ...Array(3 - careerPoints.length).fill("Additional career insights available with premium access")]) 
+                    ? careerPoints
                     : [
                         "10th house in Sagittarius suggests a career path requiring knowledge, travel, or teaching",
                         "Jupiter's placement indicates success in fields related to communication or publishing",
@@ -667,7 +667,7 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                       ];
                   
                   const finalRelationshipPoints = relationshipPoints.length > 0 
-                    ? (relationshipPoints.length >= 3 ? relationshipPoints.slice(0, 3) : [...relationshipPoints, ...Array(3 - relationshipPoints.length).fill("Additional relationship insights available with premium access")]) 
+                    ? relationshipPoints
                     : [
                         "Venus in the 7th house indicates an attractive partner with artistic sensibilities",
                         "Mars square Venus suggests passionate relationships with occasional conflicts",
