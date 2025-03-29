@@ -132,7 +132,9 @@ export default async function handler(req, res) {
       model: req.body.model,
       messages: req.body.messages,
       temperature: req.body.temperature || 0.7,
-      max_tokens: Math.min(req.body.max_tokens || 16000, 16000), // Increase to 16000 tokens to avoid truncation
+      max_tokens: Math.min(req.body.max_tokens || 32000, 32000), // Increase to 32000 tokens to avoid truncation
+      stop: ["<|im_end|>"], // Add stop sequence to ensure model doesn't cut off response early
+      stop_sequences: [], // Ensure no custom stop sequences are being used
     };
     
     // Check if this is a simple health check or non-astrological query
@@ -177,38 +179,23 @@ export default async function handler(req, res) {
     
     // Add specific instructions to avoid truncation in the system prompt
     if (requestData.messages && requestData.messages.length > 0 && requestData.messages[0].role === 'system') {
-      // Check if this is an astrological reading request
-      const isAstrologyReading = requestData.messages.some(msg => 
-        msg.role === 'user' && 
-        (msg.content.includes('astrological reading') || 
-         msg.content.includes('birth chart') ||
-         msg.content.includes('Planet Positions:') ||
-         msg.content.includes('born on') && msg.content.includes('at') && msg.content.includes('in') ||
-         msg.content.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+/i))
-      );
-
-      // Also check for explicit non-astrological health check or system test queries
-      const isHealthCheck = requestData.messages.some(msg => 
-        (msg.role === 'user' && 
-         (msg.content.includes('healthy') || 
-          msg.content.length < 20)) || // Short messages likely aren't asking for astrology readings
-        (msg.role === 'system' && 
-         msg.content.includes('Do NOT provide astrological readings'))
-      );
-
-      if (isAstrologyReading && !isHealthCheck) {
-        // Only enhance astrological reading prompts, not health checks
-        console.log('Detected astrological reading request, enhancing system prompt');
-        requestData.messages[0].content += " Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content.";
-        
-        // For astrological readings, ensure max_tokens is high enough
-        requestData.max_tokens = 16000;
-      } else if (isHealthCheck) {
-        console.log('Detected health check or test request, keeping response brief');
-        // For health checks, ensure max_tokens is low to avoid long responses
-        requestData.max_tokens = Math.min(requestData.max_tokens, 100);
-      }
+      // Augment the system message with anti-truncation instructions
+      const originalSystemContent = requestData.messages[0].content;
+      
+      // Add anti-truncation instructions
+      const enhancedSystemContent = originalSystemContent + " IMPORTANT INSTRUCTION: Always provide a complete response without truncation. Cover all requested sections thoroughly. Start with the most important information. Format each section with ## headers and numbered lists (1., 2., 3.) for clarity. Never end a response mid-sentence or before completing all requested sections.";
+      
+      // Update the system message
+      requestData.messages[0].content = enhancedSystemContent;
+      
+      // Ensure maximum token limit for astrology requests
+      requestData.max_tokens = 32000; // Set to the maximum possible
     }
+    
+    // Add completion format parameters to improve response quality
+    requestData.top_p = 0.7;         // Helps maintain focus  
+    requestData.frequency_penalty = 0.5; // Reduces repetition
+    requestData.presence_penalty = 0.5;  // Encourages covering all topics
     
     // Pre-process any request containing planet positions with coordinates
     console.log('Checking for planet positions in the request...');

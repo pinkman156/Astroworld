@@ -486,7 +486,7 @@ class ApiService {
             messages: [
               {
                 role: "system",
-                content: systemPrompt
+                content: systemPrompt + " IMPORTANT: Always provide a complete response without truncation. Cover every requested section fully. Do not end your response abruptly. Format each section with ## headers and numbered lists (1., 2., 3.) for clarity."
               },
               {
                 role: "user",
@@ -938,19 +938,55 @@ Use section headers with ## and keep points concise but complete. Format lists w
 
 ${summarizedChartData.planetPositions ? 'Planet Positions:\n' + summarizedChartData.planetPositions : 'Birth chart details:\n' + JSON.stringify(summarizedChartData)}
 
-Include the following sections in your response:
+IMPORTANT: Start with the most crucial information and format your response as follows:
 
-Birth Details: Date, Time, Place, Name
-Birth Chart Overview: Brief overview of planetary positions and influences - be sure to explicitly mention the Sun sign, Moon sign, and Ascendant/Lagna (e.g., "The Sun is in Gemini, the Moon is in Scorpio, and the Ascendant/Lagna is in Virgo")
-Ascendant/Lagna: Information about rising sign qualities and influence
-Personality Overview: Analysis of personality traits and character
-Career Insights: 3 specific insights about suitable career fields, strengths, and timing
-Relationship Patterns: 3 insights about compatibility, emotional needs, and communication
-Key Strengths: 5 primary strengths from the chart
-Potential Challenges: 5 potential difficulties or growth areas
-Significant Chart Features: 5 notable planetary configurations or yogas
+## Birth Details
+- Date: ${birthData.date}
+- Time: ${birthData.time}
+- Place: ${birthData.place}
+- Name: ${birthData.name}
 
-For lists, use numbered format (1., 2., 3.). Keep points concise but meaningful. Focus on concrete insights rather than general statements.`;
+## Birth Chart Overview
+Provide a brief overview including the Sun sign, Moon sign, and Ascendant/Lagna sign - be explicit about these three positions.
+
+## Ascendant/Lagna
+Describe the rising sign qualities and influence.
+
+## Personality Overview
+Analyze the personality traits and character.
+
+## Career Insights
+1. (First career insight)
+2. (Second career insight)
+3. (Third career insight)
+
+## Relationship Patterns
+1. (First relationship insight)
+2. (Second relationship insight)
+3. (Third relationship insight)
+
+## Key Strengths
+1. (First strength)
+2. (Second strength)
+3. (Third strength)
+4. (Fourth strength)
+5. (Fifth strength)
+
+## Potential Challenges
+1. (First challenge)
+2. (Second challenge)
+3. (Third challenge)
+4. (Fourth challenge)
+5. (Fifth challenge)
+
+## Significant Chart Features
+1. (First feature)
+2. (Second feature)
+3. (Third feature)
+4. (Fourth feature)
+5. (Fifth feature)
+
+Keep points concise but substantive. Focus on concrete insights rather than general statements.`;
 
         const comprehensivePrompt = this.cleanAstrologyPrompt(comprehensivePrePrompt);
         console.log('Comprehensive prompt:', comprehensivePrompt);
