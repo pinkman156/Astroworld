@@ -371,6 +371,59 @@ class ApiService {
   }
 
   /**
+   * Clean coordinate data from astrological prompts to improve AI processing
+   * @param prompt The original prompt with coordinates
+   * @returns A cleaned prompt without numerical coordinates
+   */
+  cleanAstrologyPrompt(prompt: string): string {
+    console.log('Cleaning astrological prompt coordinates...');
+    
+    // Replace escaped newlines with real newlines for better processing
+    let cleanedPrompt = prompt.replace(/\\n/g, '\n');
+    
+    // Various patterns to match coordinates in different formats
+    const atDegreePattern = /\s+at\s+\d+\.\d+°/g;
+    const atDecimalPattern = /\s+at\s+\d+\.\d+(?!\w)/g;
+    const standaloneCoordinatePattern = /\s+\d+\.\d+°(?!\w)/g;
+    const parenthesesPattern = /\s*\(\s*\d+\.\d+[°\s]*\)/g;
+    const retrogradeCoordPattern = /\s*\(\s*\d+\.\d+[°\s]*,?\s*Retrograde\s*\)/gi;
+
+    // Count matches for debugging
+    const atDegreeMatches = (cleanedPrompt.match(atDegreePattern) || []).length;
+    const atDecimalMatches = (cleanedPrompt.match(atDecimalPattern) || []).length;
+    const standaloneMatches = (cleanedPrompt.match(standaloneCoordinatePattern) || []).length;
+    const parenthesesMatches = (cleanedPrompt.match(parenthesesPattern) || []).length;
+    
+    if (atDegreeMatches + atDecimalMatches + standaloneMatches + parenthesesMatches > 0) {
+      console.log(`Found coordinate patterns: ${atDegreeMatches} 'at X.Y°', ${atDecimalMatches} 'at X.Y', ${standaloneMatches} standalone coordinates, ${parenthesesMatches} in parentheses`);
+    }
+    
+    // Replace retrograde coordinates while preserving retrograde status
+    cleanedPrompt = cleanedPrompt.replace(retrogradeCoordPattern, ' (Retrograde)');
+    
+    // Remove all other coordinates
+    cleanedPrompt = cleanedPrompt
+      .replace(atDegreePattern, '')
+      .replace(atDecimalPattern, '')
+      .replace(standaloneCoordinatePattern, '')
+      .replace(parenthesesPattern, '')
+      // Clean general degree pattern (planet/sign followed by degrees)
+      .replace(/([A-Za-z]+)\s+\d+\.\d+°/g, '$1')
+      // Clean any decimal followed by degree symbol
+      .replace(/\d+\.\d+°/g, '');
+    
+    // Check for any remaining coordinates
+    const remainingCoords = cleanedPrompt.match(/\d+\.\d+°/g);
+    if (remainingCoords) {
+      console.log(`Found ${remainingCoords.length} remaining coordinates after cleaning. Removing these.`);
+      cleanedPrompt = cleanedPrompt.replace(/\d+\.\d+°/g, '');
+    }
+    
+    console.log('Astrological prompt coordinates cleaned successfully');
+    return cleanedPrompt;
+  }
+
+  /**
    * Get AI-generated insight with a specific prompt
    */
   async getAIInsight(prompt: string, systemPrompt: string = "You are an expert Vedic astrologer.", insightType: string = "general"): Promise<string> {
@@ -389,6 +442,17 @@ class ApiService {
       const maxAttempts = 3;
       let responseContent = "";
       
+      // Check if this is an astrological request and clean coordinates if needed
+      const isAstrologyRequest = prompt.includes('astrological reading') && 
+        (prompt.includes('Planet Positions:') || prompt.match(/Sun:|Moon:|Ascendant:/));
+      
+      // Clean coordinates from astrological prompts
+      const cleanedPrompt = isAstrologyRequest ? this.cleanAstrologyPrompt(prompt) : prompt;
+      
+      if (isAstrologyRequest) {
+        console.log('Cleaned astrological prompt for better AI processing');
+      }
+      
       while (attempt < maxAttempts) {
         try {
           console.log(`Making Together AI request for ${insightType} with ${maxTokens} max_tokens (attempt ${attempt + 1}/${maxAttempts})`);
@@ -403,7 +467,7 @@ class ApiService {
               },
               {
                 role: "user",
-                content: prompt
+                content: cleanedPrompt
               }
             ],
             temperature: 0.7,
@@ -484,6 +548,11 @@ Include birth details, birth chart overview, personality traits, career options 
 Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
         }
         
+        // Clean the simplified prompt if it's an astrological request
+        const isAstrologyRetry = simplifiedPrompt.includes('astrological reading') ||
+                                simplifiedPrompt.includes('birth chart');
+        const cleanedSimplifiedPrompt = isAstrologyRetry ? this.cleanAstrologyPrompt(simplifiedPrompt) : simplifiedPrompt;
+        
         try {
           const retryResponse = await axios.post('/api/together/chat', {
             model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
@@ -494,7 +563,7 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
               },
               {
                 role: "user",
-                content: simplifiedPrompt
+                content: cleanedSimplifiedPrompt
               }
             ],
             temperature: 0.7,
