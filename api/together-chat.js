@@ -427,7 +427,7 @@ export default async function handler(req, res) {
         .trim();
 
       console.log('Optimized prompt:', optimizedPrompt);
-      const systemPrompt = "You are an expert Vedic astrologer providing concise readings.";
+      const systemPrompt = "You are an expert Vedic astrologer providing concise readings. IMPORTANT INSTRUCTION: Always provide a complete response without truncation. Cover all requested sections thoroughly. Start with the most important information. Format each section with ## headers and numbered lists (1., 2., 3.) for clarity. Never end a response mid-sentence or before completing all requested sections.";
       
       // Update the request data with optimized prompts
       requestData.messages = [

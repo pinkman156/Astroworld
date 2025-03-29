@@ -1106,7 +1106,7 @@ Keep all points concise (10-15 words each) and use numbered format for lists (1.
           // Try with progressive token increase for the fallback
           const fallbackInsight = await this.getAIInsight(
             fallbackPrompt, 
-            "You are an expert Vedic astrologer providing concise readings.", 
+            "You are an expert Vedic astrologer providing concise readings. IMPORTANT INSTRUCTION: Always provide a complete response without truncation. Cover all requested sections thoroughly. Start with the most important information. Format each section with ## headers and numbered lists (1., 2., 3.) for clarity. Never end a response mid-sentence or before completing all requested sections.", 
             "comprehensive_fallback"
           );
           
