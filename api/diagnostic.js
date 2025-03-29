@@ -34,9 +34,7 @@ export default async function handler(req, res) {
         vercel_env: process.env.VERCEL_ENV || 'not set',
         vercel_region: process.env.VERCEL_REGION || 'not set',
         together_api_key: process.env.TOGETHER_API_KEY ? 'present' : 'missing',
-        vite_together_api_key: process.env.VITE_TOGETHER_API_KEY ? 'present' : 'missing',
-        claude_api_key: process.env.CLAUDE_API_KEY ? 'present' : 'missing',
-        vite_claude_api_key: process.env.VITE_CLAUDE_API_KEY ? 'present' : 'missing'
+        vite_together_api_key: process.env.VITE_TOGETHER_API_KEY ? 'present' : 'missing'
       },
       timestamp: new Date().toISOString()
     });

@@ -9,14 +9,6 @@
       }
     },
     {
-      "src": "api/claude-chat.js",
-      "use": "@vercel/node",
-      "config": {
-        "maxDuration": 15,
-        "memory": 1024
-      }
-    },
-    {
       "src": "api/together-chat.js",
       "use": "@vercel/node",
       "config": {
@@ -51,12 +43,12 @@
     { "source": "/api/prokerala-proxy", "destination": "/api/prokerala-proxy.js" },
     { "source": "/api/prokerala-proxy/:path*", "destination": "/api/prokerala-proxy.js" },
     { "source": "/api/geocode", "destination": "/api/geocode.js" },
-    { "source": "/api/together/chat", "destination": "/api/claude-chat.js" },
-    { "source": "/api/together/chat/:path*", "destination": "/api/claude-chat.js" },
-    { "source": "/api/together/health", "destination": "/api/claude-chat.js" },
-    { "source": "/api/claude/chat", "destination": "/api/claude-chat.js" },
-    { "source": "/api/claude/chat/:path*", "destination": "/api/claude-chat.js" },
-    { "source": "/api/claude/health", "destination": "/api/claude-chat.js" },
+    { "source": "/api/together/chat", "destination": "/api/together-chat.js" },
+    { "source": "/api/together/chat/:path*", "destination": "/api/together-chat.js" },
+    { "source": "/api/together/health", "destination": "/api/together-chat.js" },
+    { "source": "/api/claude/chat", "destination": "/api/together-chat.js" },
+    { "source": "/api/claude/chat/:path*", "destination": "/api/together-chat.js" },
+    { "source": "/api/claude/health", "destination": "/api/together-chat.js" },
     { "source": "/api/diagnostic", "destination": "/api/diagnostic.js" },
     { "source": "/(.*)", "destination": "/$1" }
   ],

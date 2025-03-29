@@ -13,7 +13,6 @@ export default defineConfig(({ mode }) => {
       'process.env.VITE_PROKERALA_CLIENT_ID': JSON.stringify(env.VITE_PROKERALA_CLIENT_ID || ''),
       'process.env.VITE_PROKERALA_CLIENT_SECRET': JSON.stringify(env.VITE_PROKERALA_CLIENT_SECRET || ''),
       'process.env.VITE_TOGETHER_API_KEY': JSON.stringify(env.VITE_TOGETHER_API_KEY || ''),
-      'process.env.VITE_CLAUDE_API_KEY': JSON.stringify(env.VITE_CLAUDE_API_KEY || ''),
       'process.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL || '')
     },
     server: {
@@ -46,6 +45,7 @@ export default defineConfig(({ mode }) => {
         '/api/claude/chat': {
           target: 'http://localhost:3001',
           changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/claude/, '/api/together')
         }
       }
     }
