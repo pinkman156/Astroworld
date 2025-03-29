@@ -254,22 +254,23 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                     birthDetailsText.match(/Name of ([^:]+?)(?:\r?\n|$)/i) ||
                                     insight.message.match(/Name:?\s*(.+?)(?:\r?\n|$)/i);
                                     
-                  const dateMatch = birthDetailsText.match(/(?:Birth |Date of )?Date:?\s*(.+?)(?:\r?\n|$)/i) || 
+                  const dateMatch = birthDetailsText.match(/(?:Birth )?Date:?\s*(.+?)(?:\r?\n|$)/i) || 
                                     birthDetailsText.match(/Date of Birth:?\s*(.+?)(?:\r?\n|$)/i) ||
                                     insight.message.match(/Date of Birth:?\s*(.+?)(?:\r?\n|$)/i);
                                     
-                  const timeMatch = birthDetailsText.match(/(?:Birth |Time of )?Time:?\s*(.+?)(?:\r?\n|$)/i) || 
+                  const timeMatch = birthDetailsText.match(/(?:Birth )?Time:?\s*(.+?)(?:\r?\n|$)/i) || 
                                     birthDetailsText.match(/Time of Birth:?\s*(.+?)(?:\r?\n|$)/i) ||
                                     insight.message.match(/Time of Birth:?\s*(.+?)(?:\r?\n|$)/i);
                                     
-                  const placeMatch = birthDetailsText.match(/(?:Birth |Place of )?Place:?\s*(.+?)(?:\r?\n|$)/i) || 
+                  const placeMatch = birthDetailsText.match(/(?:Birth )?Place:?\s*(.+?)(?:\r?\n|$)/i) || 
                                      birthDetailsText.match(/Place of Birth:?\s*(.+?)(?:\r?\n|$)/i) ||
                                      insight.message.match(/Place of Birth:?\s*(.+?)(?:\r?\n|$)/i);
                   
-                  const name = nameMatch ? nameMatch[1].trim() : '';
-                  const date = dateMatch ? dateMatch[1].trim() : '';
-                  const time = timeMatch ? timeMatch[1].trim() : '';
-                  const place = placeMatch ? placeMatch[1].trim() : '';
+                  // Clean the extracted values to remove "of Birth:" prefix
+                  const name = nameMatch ? nameMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : '';
+                  const date = dateMatch ? dateMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : '';
+                  const time = timeMatch ? timeMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : '';
+                  const place = placeMatch ? placeMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : '';
                   
                   console.log(`Extracted Birth Details - Name: ${name}, Date: ${date}, Time: ${time}, Place: ${place}`);
                   
@@ -560,6 +561,26 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                     
                     // Log the raw text for debugging
                     console.log('Parsing text:', text);
+
+                    // First check if text contains numbered points all in one line (e.g. "1. Point 1. 2. Point 2")
+                    if (/\d+\.\s+.+?\d+\.\s+/.test(text)) {
+                      // Split by numbered points pattern
+                      const points = [];
+                      let remaining = text;
+                      
+                      // Extract each numbered point
+                      const numPointRegex = /(\d+\.\s+[^.0-9]+?)(?=\s+\d+\.|$)/g;
+                      const matches = Array.from(remaining.matchAll(numPointRegex));
+                      
+                      if (matches && matches.length > 0) {
+                        return matches.map(match => match[1].trim().replace(/^\d+\.\s*/, ''));
+                      }
+                      
+                      // Fallback: Split by digit-period-space pattern
+                      return text.split(/\s+\d+\.\s+/)
+                        .filter(item => item.trim().length > 0)
+                        .map(item => item.replace(/^\d+\.\s*/, '').trim());
+                    }
                     
                     // Check for numbered list format (1., 2., 3., etc.)
                     // This version handles both lines starting with numbers and inline numbered lists
@@ -711,7 +732,7 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                               </svg>
                               Career Path
                             </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                               {finalCareerPoints.map((point, index) => (
                                 <Paper key={index} sx={{ 
                                   p: 2, 
@@ -731,6 +752,8 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                     color: '#FBCFE8',
                                     fontWeight: 'medium',
                                     mr: 2,
+                                    mt: 0.2,
+                                    flexShrink: 0,
                                     fontSize: '0.85rem'
                                   }}>
                                     {index + 1}
@@ -778,7 +801,7 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                               </svg>
                               Relationships
                             </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                               {finalRelationshipPoints.map((point, index) => (
                                 <Paper key={index} sx={{ 
                                   p: 2, 
@@ -798,6 +821,8 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                     color: '#FBCFE8',
                                     fontWeight: 'medium',
                                     mr: 2,
+                                    mt: 0.2,
+                                    flexShrink: 0,
                                     fontSize: '0.85rem'
                                   }}>
                                     {index + 1}
