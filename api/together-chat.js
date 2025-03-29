@@ -135,6 +135,76 @@ export default async function handler(req, res) {
       max_tokens: Math.min(req.body.max_tokens || 10000, 10000), // Cap at 10000 tokens to respect model context limits
     };
     
+    // Pre-process any request containing planet positions with coordinates
+    const hasPlanetPositions = requestData.messages.some(msg => 
+      msg.role === 'user' && 
+      (
+        (msg.content.includes('Planet Positions:') && msg.content.includes('Sun:')) ||
+        msg.content.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn)[\s:]+[A-Za-z]+\s+at\s+\d+\.\d+°/i)
+      )
+    );
+    
+    if (hasPlanetPositions) {
+      console.log('Detected pre-formatted planet positions with coordinates. Cleaning request format...');
+      
+      // Clean up each message
+      requestData.messages = requestData.messages.map(msg => {
+        if (msg.role === 'user') {
+          // Extract birth details for better formatting
+          const nameMatch = msg.content.match(/for\s+([^(,\n]+)/i);
+          const birthDetailsMatch = msg.content.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+          
+          const name = nameMatch ? nameMatch[1].trim() : 'the person';
+          const birthDate = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+          const birthTime = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
+          const birthPlace = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+          
+          // Parse planet positions - extract just the planets and signs without coordinates
+          const planetLines = msg.content.split('\n').filter(line => 
+            line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
+          );
+          
+          // Format planet positions without coordinates
+          const cleanedPlanets = planetLines.map(line => {
+            const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:\s+at\s+\d+\.\d+°)?(\s+\(Retrograde\))?/i);
+            if (match) {
+              return `${match[1]}: ${match[2]}${match[3] || ''}`;
+            }
+            return line.replace(/\s+at\s+\d+\.\d+°/g, ''); // Fallback cleanup if regex match fails
+          }).join('   ');
+          
+          // Get section headers from the original content
+          const sectionMatch = msg.content.match(/Include the following sections[^:]*:([^]*?)(?:For lists|$)/i);
+          const sectionHeaders = sectionMatch ? sectionMatch[1].trim()
+            .split('\n')
+            .filter(line => line.trim().length > 0)
+            .map(line => line.trim())
+            .join('   ') 
+            : 'Birth Details: Date, Time, Place, Name   Birth Chart Overview: Brief overview   Ascendant/Lagna: Information   Personality Overview: Analysis   Career Insights: 3 specific insights   Relationship Patterns: 3 insights   Key Strengths: 5 primary strengths   Potential Challenges: 5 potential difficulties   Significant Chart Features: 5 notable configurations';
+          
+          // Format list instructions
+          const listFormatMatch = msg.content.match(/For lists[^.]*\.(.*?)(?:$|Keep points)/i);
+          const listFormat = listFormatMatch ? listFormatMatch[1].trim() : 'Use numbered format (1., 2., 3.).';
+          
+          // Create a clean optimized prompt
+          const cleanedContent = `Generate a comprehensive astrological reading for ${name} born on ${birthDate} at ${birthTime} in ${birthPlace}.   Planet Positions:   ${cleanedPlanets}   Include the following sections:   ${sectionHeaders}   ${listFormat} Keep points concise but meaningful. Focus on concrete insights.`;
+          
+          console.log('Cleaned prompt format:', cleanedContent.substring(0, 100) + '...');
+          
+          return {
+            ...msg,
+            content: cleanedContent
+          };
+        }
+        return msg;
+      });
+      
+      // Set a more appropriate max_tokens for reliability
+      requestData.max_tokens = 5000;
+      
+      console.log('Successfully cleaned pre-formatted astrological request.');
+    }
+    
     // Detect complex astrological reading requests and optimize the prompt format
     const isAstrologyRequest = requestData.messages.some(msg => 
       msg.role === 'user' && 
@@ -143,7 +213,7 @@ export default async function handler(req, res) {
         msg.content.includes('birth chart') || 
         (msg.content.includes('Nakshatra') && msg.content.includes('birth'))
       )
-    );
+    ) && !hasPlanetPositions; // Skip if we already processed planet positions
     
     if (isAstrologyRequest) {
       console.log('Astrological reading request detected. Optimizing prompt format.');
@@ -307,27 +377,50 @@ export default async function handler(req, res) {
           // Extract basic birth details from the request
           const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
           
-          // Extract name and birth details using regex if possible
-          const detailsMatch = userMessage.match(/for\s+([^.]+)\s+born\s+on\s+([^.]+)\s+at\s+([^.]+)\s+in\s+([^.]+)/);
-          let modifiedPrompt = '';
-          
-          if (detailsMatch) {
-            // If we can extract structured information
-            const [_, name, date, time, place] = detailsMatch;
+          // Parse planet positions if present
+          let cleanedPlanets = '';
+          if (userMessage.includes('Planet Positions:')) {
+            const planetLines = userMessage.split('\n').filter(line => 
+              line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
+            );
             
-            // Create a more direct prompt focused on essential information
-            modifiedPrompt = `Generate a concise birth chart reading for ${name} born on ${date} at ${time} in ${place}.   Include these sections:   Birth Details: Date, Time, Place, Name   Birth Chart Overview: Key planetary positions including Sun, Moon, and Ascendant/Lagna   Personality Overview: Key traits   Key Strengths: 3 strengths   Potential Challenges: 3 challenges   Make sure to clearly mention the Ascendant/Rising sign. Keep each section brief and direct.`;
-            
-            // Extract chart data if available
-            const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
-            if (chartDataMatch && chartDataMatch[1]) {
-              modifiedPrompt += ` Chart data: ${chartDataMatch[1]}`;
-            }
-          } else {
-            // Fallback to a simpler transformation
-            modifiedPrompt = userMessage.replace(/comprehensive/g, 'concise')
-                                      .replace(/following EXACT section headers.+?FORMATTING INSTRUCTIONS:/s, 'these key sections only: ## Birth Details, ## Birth Chart Overview, ## Personality Overview, ## Key Strengths (3 only), ## Potential Challenges (3 only).');
+            // Format planet positions without coordinates
+            cleanedPlanets = planetLines.map(line => {
+              const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:\s+at\s+\d+\.\d+°)?(\s+\(Retrograde\))?/i);
+              if (match) {
+                return `${match[1]}: ${match[2]}${match[3] || ''}`;
+              }
+              return line.replace(/\s+at\s+\d+\.\d+°/g, ''); // Fallback cleanup if regex match fails
+            }).join('   ');
           }
+          
+          // Extract name and birth details using regex if possible
+          const nameMatch = userMessage.match(/for\s+([^(,\n]+)/i);
+          const birthDetailsMatch = userMessage.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+          
+          let name = nameMatch ? nameMatch[1].trim() : 'the person';
+          let date = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+          let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
+          let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+          
+          // Create a simplified, clean prompt
+          let modifiedPrompt = `Generate a concise birth chart reading for ${name} born on ${date} at ${time} in ${place}.`;
+          
+          // Add planet positions if we extracted them
+          if (cleanedPlanets) {
+            modifiedPrompt += `   Planet Positions:   ${cleanedPlanets}`;
+          }
+          
+          // Add simplified section headers
+          modifiedPrompt += `   Include only these sections:   Birth Details: Date, Time, Place, Name   Birth Chart Overview: Key planetary positions including Sun, Moon, and Ascendant/Lagna   Personality Overview: Key traits   Key Strengths: 3 strengths   Potential Challenges: 3 challenges   Make sure to clearly mention the Sun sign, Moon sign, and Ascendant/Rising sign. Keep each section brief.`;
+          
+          // Extract chart data if available (for more complex cases)
+          const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
+          if (chartDataMatch && chartDataMatch[1]) {
+            modifiedPrompt += ` Chart data: ${chartDataMatch[1]}`;
+          }
+          
+          console.log('Simplified prompt for retry:', modifiedPrompt.substring(0, 100) + '...');
           
           // Create modified request with simplified system prompt
           const modifiedRequest = {
@@ -383,27 +476,50 @@ export default async function handler(req, res) {
           // Create a modified version of the query
           const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
           
-          // Extract name and birth details using regex if possible
-          const detailsMatch = userMessage.match(/for\s+([^.]+)\s+born\s+on\s+([^.]+)\s+at\s+([^.]+)\s+in\s+([^.]+)/);
-          let modifiedPrompt = '';
-          
-          if (detailsMatch) {
-            // If we can extract structured information
-            const [_, name, date, time, place] = detailsMatch;
+          // Parse planet positions if present
+          let cleanedPlanets = '';
+          if (userMessage.includes('Planet Positions:')) {
+            const planetLines = userMessage.split('\n').filter(line => 
+              line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
+            );
             
-            // Create a more direct prompt focused on listing career options
-            modifiedPrompt = `Based on the natal chart for ${name} born on ${date} at ${time} in ${place}, list exactly 5 suitable career fields and 3 professional strengths.   Use numbered format (1., 2., 3.) for clarity.   Be specific and focus on concrete career paths based on astrological indicators.`;
-            
-            // Extract chart data if available
-            const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
-            if (chartDataMatch && chartDataMatch[1]) {
-              modifiedPrompt += ` Chart data: ${chartDataMatch[1]}`;
-            }
-          } else {
-            // Fallback to a simpler transformation
-            modifiedPrompt = userMessage.replace(/Generate a career reading/i, 'List exactly 5 suitable career options as bullet points. Keep it simple and direct.')
-                                    .replace(/Focus ONLY on.+?\./, 'Focus only on listing career options.');
+            // Format planet positions without coordinates
+            cleanedPlanets = planetLines.map(line => {
+              const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:\s+at\s+\d+\.\d+°)?(\s+\(Retrograde\))?/i);
+              if (match) {
+                return `${match[1]}: ${match[2]}${match[3] || ''}`;
+              }
+              return line.replace(/\s+at\s+\d+\.\d+°/g, ''); // Fallback cleanup if regex match fails
+            }).join('   ');
           }
+          
+          // Extract name and birth details using regex if possible
+          const nameMatch = userMessage.match(/for\s+([^(,\n]+)/i);
+          const birthDetailsMatch = userMessage.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+          
+          let name = nameMatch ? nameMatch[1].trim() : 'the person';
+          let date = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+          let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
+          let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+          
+          // Create a more direct prompt focused on listing career options
+          let modifiedPrompt = `Based on the natal chart for ${name} born on ${date} at ${time} in ${place}`;
+          
+          // Add planet positions if we extracted them
+          if (cleanedPlanets) {
+            modifiedPrompt += ` with   Planet Positions:   ${cleanedPlanets}`;
+          }
+          
+          // Add specific career focus
+          modifiedPrompt += `,   list exactly 5 suitable career fields based on astrological influences.   For each career option, give a brief reason why it's suitable.   Then provide 3 professional strengths indicated by the chart.   Use numbered format (1., 2., 3.) for clarity.   Be specific and focus on concrete career paths.`;
+          
+          // Extract chart data if available (for more complex cases)
+          const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
+          if (chartDataMatch && chartDataMatch[1]) {
+            modifiedPrompt += ` Chart data: ${chartDataMatch[1]}`;
+          }
+          
+          console.log('Simplified career prompt for retry:', modifiedPrompt.substring(0, 100) + '...');
           
           // Create modified request with specialized system prompt
           const modifiedRequest = {
