@@ -188,8 +188,6 @@ function App() {
           </motion.div>
         )}
 
-        {/* Environment Variables Tester */}
-        <EnvTester />
 
         <div className="grid grid-cols-1 gap-8">
           {/* Birth Data Form */}
