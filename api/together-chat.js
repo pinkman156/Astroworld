@@ -360,6 +360,7 @@ export default async function handler(req, res) {
         .replace(/(\w+)\s+is\s+in\s+(\w+)\s+at\s+\d+\.\d+°/gi, '$1 is in $2')
         .replace(/(\w+):\s+(\w+)\s+at\s+\d+\.\d+°/gi, '$1: $2')
         .replace(/\n+/g, ' ')
+        .replace(/\\(.)/g, '$1')
         .replace(/<[^>]*>/g, '')
         .trim();
 

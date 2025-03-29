@@ -405,6 +405,7 @@ class ApiService {
     cleanedPrompt = cleanedPrompt
       // Remove newline characters and HTML tags
       .replace(/\n+/g, ' ')
+      .replace(/\\(.)/g, '$1')
       .replace(/<[^>]*>/g, '')
       .replace(atDegreePattern, '')
       .replace(atDecimalPattern, '')
