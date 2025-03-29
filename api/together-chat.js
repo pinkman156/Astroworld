@@ -150,7 +150,7 @@ export default async function handler(req, res) {
               'Authorization': `Bearer ${apiKey}`
             },
             data: requestData,
-            timeout: 15000 // 15 second timeout to stay within Vercel's function limits
+            timeout: 150000 // 150 second timeout to stay within Vercel's function limits
           });
         },
         2, // Max 2 retries
@@ -209,7 +209,7 @@ export default async function handler(req, res) {
             messages: [
               {
                 role: 'system',
-                content: 'You are an expert astrologer who specializes in career guidance. Keep responses direct and structured, always using bullet points. Be brief but clear.'
+                content: 'You are an expert astrologer who specializes in career guidance. Keep responses direct and structured, always using bullet points. '
               },
               {
                 role: 'user',
@@ -272,7 +272,7 @@ export default async function handler(req, res) {
           const simplifiedMessages = requestData.messages.map(msg => {
             if (msg.role === 'user') {
               // Simplify user message by taking first sentence and adding brevity instruction
-              const content = msg.content.split('.')[0] + '. Keep response very brief and focused.';
+              const content = msg.content.split('.')[0] ;
               return { ...msg, content };
             }
             return msg;
