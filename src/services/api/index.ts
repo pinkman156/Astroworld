@@ -611,7 +611,18 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
       // Add a small delay before next request to prevent overloading
       await this.delay(500);
       
-      // Get kundli data for additional details
+      // Get planet position data for more accurate chart details
+      console.log('Fetching planet position data for chart details');
+      const planetPositionResponse = await this.makeProkeralaRequest('planet-position', {
+        datetime: formattedDateTime,
+        coordinates,
+        ayanamsa: 1
+      });
+      
+      // Add a small delay before next request to prevent overloading
+      await this.delay(500);
+      
+      // Get kundli data as fallback if needed
       const kundliResponse = await this.makeProkeralaRequest('kundli', {
         datetime: formattedDateTime,
         coordinates,
@@ -621,13 +632,57 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
       // Create the chart data summary for AI
       const chartData = {
         chart: chartResponse.data,
+        planets: planetPositionResponse.data?.planets || [],
         kundli: kundliResponse.data
       };
       
-      // Helper function to reduce data size
+      // Helper function to reduce data size and format planet positions
       const summarizeChartData = (data: any): any => {
         // Create a summarized version of the chart data to reduce payload size
         const summary: any = {};
+        
+        // Extract planet positions and format them for the AI
+        if (data.planets && Array.isArray(data.planets)) {
+          // Format planet positions in a readable format
+          let planetPositionsText = '';
+          
+          // Important planets to highlight first (in order of importance for astrology)
+          const keyPlanets = ['Sun', 'Moon', 'Ascendant', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
+          
+          // Add rising sign/ascendant first if found
+          const ascendant = data.planets.find((p: any) => p.name === 'Ascendant' || p.name === 'Lagna');
+          if (ascendant) {
+            const sign = ascendant.zodiac || ascendant.sign || '';
+            if (sign) {
+              planetPositionsText += `Rising Sign/Ascendant: ${sign}\n`;
+            }
+          }
+          
+          // Add key planets in specific order
+          keyPlanets.forEach(planetName => {
+            const planet = data.planets.find((p: any) => p.name === planetName);
+            if (planet) {
+              const sign = planet.zodiac || planet.sign || '';
+              const degree = planet.longitude || planet.degree || '';
+              const retrograde = planet.is_retrograde ? ' (Retrograde)' : '';
+              
+              // Only add if we have sign information
+              if (sign) {
+                planetPositionsText += `${planetName}: ${sign}${degree ? ` at ${degree}°` : ''}${retrograde}\n`;
+              }
+            }
+          });
+          
+          // Add nakshatra information if available
+          data.planets.forEach((planet: any) => {
+            if ((planet.name === 'Moon' || planet.name === 'Sun') && planet.nakshatra) {
+              planetPositionsText += `${planet.name} Nakshatra: ${planet.nakshatra}\n`;
+            }
+          });
+          
+          // Store the formatted planet positions
+          summary.planetPositions = planetPositionsText;
+        }
         
         // Extract only essential information from chart data
         if (data.chart && data.chart.data) {
@@ -638,7 +693,7 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
           summary.chart = { data: chartSummary };
         }
         
-        // Extract only essential information from kundli data
+        // Extract only essential information from kundli data (as fallback)
         if (data.kundli && data.kundli.data) {
           const kundliSummary: any = {};
           if (data.kundli.data.nakshatra_details) kundliSummary.nakshatra_details = data.kundli.data.nakshatra_details;
@@ -660,12 +715,13 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
         // Create a prompt that requests all the information needed in a structured format
         const comprehensivePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} IST in ${birthData.place}.
 
-Birth chart details: ${JSON.stringify(summarizedChartData)}
+Birth chart details:
+${summarizedChartData.planetPositions || JSON.stringify(summarizedChartData)}
 
 Include the following sections in your response:
 
 Birth Details: Date, Time, Place, Name
-Birth Chart Overview: Brief overview of planetary positions and influences - be sure to explicitly mention the Sun sign and Moon sign (e.g., "The Sun is in Gemini and the Moon is in Scorpio")
+Birth Chart Overview: Brief overview of planetary positions and influences - be sure to explicitly mention the Sun sign, Moon sign, and Ascendant/Lagna (e.g., "The Sun is in Gemini, the Moon is in Scorpio, and the Ascendant/Lagna is in Virgo")
 Ascendant/Lagna: Information about rising sign qualities and influence
 Personality Overview: Analysis of personality traits and character
 Career Insights: 3 specific insights about suitable career fields, strengths, and timing
@@ -887,27 +943,36 @@ Keep all points concise (10-15 words each) and use numbered format for lists (1.
       
       // Preload various astrological data in parallel
       await Promise.all([
-        // Get planet positions
+        // Get planet positions - most important for the chart details
         this.makeProkeralaRequest('planet-position', {
           datetime: formattedDateTime, // Standard format for this endpoint
           coordinates: coordinates,
           ayanamsa: 1
+        }).catch(error => {
+          console.error('Error fetching planet positions:', error);
+          return null; // Allow other requests to continue if this one fails
         }),
         
-        // Get birth chart
+        // Get birth chart 
         this.makeProkeralaRequest('chart', {
           datetime: isoDateTime, // ISO format for chart endpoint
           coordinates: coordinates,
           ayanamsa: 1,
           chart_type: "rasi", // Use a simple string instead of JSON object
           chart_style: 'north-indian'
+        }).catch(error => {
+          console.error('Error fetching chart:', error);
+          return null;
         }),
         
-        // Get kundli
+        // Get kundli (used as fallback if planet positions fail)
         this.makeProkeralaRequest('kundli', {
           datetime: formattedDateTime, // Standard format for this endpoint
           coordinates: coordinates,
           ayanamsa: 1
+        }).catch(error => {
+          console.error('Error fetching kundli:', error);
+          return null;
         })
       ]);
       
