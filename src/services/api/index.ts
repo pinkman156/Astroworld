@@ -961,7 +961,7 @@ Keep all points concise (10-15 words each) and use numbered format for lists (1.
       const response = await this.client.post('/api/together/chat', {
         model: "mistralai/Mixtral-8x7B-Instruct-v0.1", 
         messages: [
-          { role: "system", content: "You are a helpful assistant.  in any career that values communication, analytical skills, and empathy. It is also important for this individual to find a career that allows them to explore their natural curiosity and desire to understand complex human behavior.\n\nAdditionally, the position of the Sun in Mithuna (Gemini) suggests a natural adaptability, versatility, and curiosity, which can be valuable traits in many different fields. The dual nature of Gemini may also indicate a need for diversity and variety in their work, so a career that offers opportunities for exploration and learning may be especially fulfilling.\n\nOverall, with the right combination of education, training, and personal development, this individual has the potential to excel in a wide range of careers that allow them to use their natural abilities to communicate, analyze, and connect with other" },
+          { role: "system", content: "You are a helpful assistant.  " },
           { role: "user", content: "Hello" }
         ],
         temperature: 0.7,
