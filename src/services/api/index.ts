@@ -439,7 +439,24 @@ class ApiService {
         
         // If prompt is a complex astrological reading, ensure we still have structure
         if (prompt.includes('astrological reading')) {
-          simplifiedPrompt = `Generate a concise astrological reading with only the most essential points. Include only Personality, Career, and Relationships sections with brief bullet points.`;
+          simplifiedPrompt = `Generate a concise astrological reading with these exact section headers:
+
+## Personality Overview
+[Brief personality traits]
+
+## Career Insights
+[Brief career potential]
+
+## Relationship Patterns
+[Brief relationship style]
+
+## Key Strengths
+[List 2-3 strengths]
+
+## Potential Challenges
+[List 2-3 challenges]
+
+IMPORTANT: Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks.`;
         }
         
         try {
@@ -448,7 +465,7 @@ class ApiService {
             messages: [
               {
                 role: "system",
-                content: "You are an expert Vedic astrologer. Provide very concise insights."
+                content: "You are an expert Vedic astrologer. Provide very concise insights. Always use ## prefix for section headers and never use bold formatting or asterisks for headers."
               },
               {
                 role: "user",
@@ -468,16 +485,21 @@ class ApiService {
           
           const retryContent = retryResponse.data.choices[0].message.content;
           
+          // Ensure proper formatting for the UI
+          const processedRetryContent = retryContent
+            .replace(/\*\*([^*]+)\*\*/g, '## $1')  // Replace **Header** with ## Header
+            .replace(/^(Personality Overview|Career Insights|Relationship Patterns|Key Strengths|Potential Challenges)$/gm, '## $1'); // Add ## to any headers without them
+          
           // Cache the retry response
           const retryCacheKey = `insight_${insightType}_simplified_${new Date().getTime()}`;
           cache.set(retryCacheKey, {
             success: true,
             data: {
-              insight: retryContent
+              insight: processedRetryContent
             }
           });
           
-          return retryContent;
+          return processedRetryContent;
         } catch (retryError: any) {
           throw new Error(`Failed to generate insight: ${retryError.message}`);
         }
@@ -613,7 +635,7 @@ class ApiService {
         // Create a prompt that requests all the information needed in a structured format
         const comprehensivePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}.
 
-Please structure your response with the following EXACT section headers:
+Please structure your response with the following EXACT section headers (use exactly these headers with ## prefix):
 
 ## Birth Chart Overview
 [Brief overview of the chart]
@@ -636,6 +658,8 @@ Please structure your response with the following EXACT section headers:
 ## Significant Chart Features
 [Notable placements, aspects, or configurations in the birth chart]
 
+IMPORTANT: Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks - only use the ## prefix for headers.
+
 Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
 
         // Make single request with appropriate system prompt
@@ -646,7 +670,7 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
               messages: [
                 {
                   role: "system",
-                  content: "You are an expert Vedic astrologer providing comprehensive birth chart readings. Always include all the sections requested by the user with exactly the section headings specified. Be concise but insightful in each section."
+                  content: "You are an expert Vedic astrologer providing comprehensive birth chart readings. Always include all the sections requested by the user with exactly the section headings specified. Be concise but insightful in each section. Always use the ## prefix for headings and never use bold formatting or asterisks for headers."
                 },
                 {
                   role: "user",
@@ -665,11 +689,17 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         // Extract the insight from the response
         const fullInsight = comprehensiveInsight.data.choices[0].message.content;
         
+        // Process the insight to ensure correct formatting for the UI components
+        // Replace any bold headers with ## headers if needed
+        const processedInsight = fullInsight
+          .replace(/\*\*([^*]+)\*\*/g, '## $1')  // Replace **Header** with ## Header
+          .replace(/^(Birth Chart Overview|Personality Overview|Career Insights|Relationship Patterns|Key Strengths|Potential Challenges|Significant Chart Features)$/gm, '## $1'); // Add ## to any headers without them
+        
         // Create the response
         const response: ApiResponse = {
           success: true,
           data: {
-            insight: fullInsight
+            insight: processedInsight
           }
         };
         
@@ -685,16 +715,42 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         try {
           console.log('Attempting simplified fallback request');
           const fallbackPrompt = `Generate a brief astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. 
-Include these exact headers: ## Personality Overview, ## Career Insights, ## Relationship Patterns. 
+
+Include exactly these headers with ## prefix:
+
+## Personality Overview
+[Brief personality analysis]
+
+## Career Insights
+[Brief career guidance]
+
+## Relationship Patterns
+[Brief relationship patterns]
+
+## Key Strengths
+[List 3 key strengths]
+
+## Potential Challenges
+[List 3 potential challenges]
+
+IMPORTANT: Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks - only use the ## prefix for headers.
+
 Keep it simple and focused. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
           
-          const fallbackInsight = await this.getAIInsight(fallbackPrompt);
+          const fallbackInsight = await this.getAIInsight(fallbackPrompt, 
+            "You are an expert Vedic astrologer providing concise birth chart readings. Always include all the sections requested with exactly the section headings specified. Always use the ## prefix for headings and never use bold formatting or asterisks for headers.", 
+            "comprehensive_fallback");
+          
+          // Process the fallback insight to ensure proper formatting
+          const processedFallbackInsight = fallbackInsight
+            .replace(/\*\*([^*]+)\*\*/g, '## $1')  // Replace **Header** with ## Header
+            .replace(/^(Personality Overview|Career Insights|Relationship Patterns|Key Strengths|Potential Challenges)$/gm, '## $1'); // Add ## to any headers without them
           
           // Create the response
           const response: ApiResponse = {
             success: true,
             data: {
-              insight: fallbackInsight
+              insight: processedFallbackInsight
             }
           };
           
