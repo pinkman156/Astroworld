@@ -383,10 +383,11 @@ class ApiService {
         return cachedResponse.data.insight;
       }
       
-      // Try with exponential backoff
+      // Try with exponential backoff - use longer timeout for single comprehensive request
       const insightResponse = await this.retryWithExponentialBackoff(
         async () => {
-          return await this.client.post('/api/together/chat', {
+          // Use a custom Axios instance with longer timeout specifically for this request
+          return await axios.post('/api/together/chat', {
             model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
             messages: [
               {
@@ -399,125 +400,23 @@ class ApiService {
               }
             ],
             temperature: 0.7,
-            max_tokens: 10000
+            max_tokens: 8000  // Reduced from 10000 to help with timeouts
+          }, {
+            timeout: 28000,  // 28 seconds (just under Vercel's 30s limit)
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Request-Type': 'astrological-insight',
+              'X-Insight-Type': insightType
+            }
           });
         },
-        2, // Max 2 retries
+        1, // Reduced to 1 retry (since we're using a longer timeout)
         1000, // Start with 1 second delay
-        3 // Triple the delay each time
+        2 // Double the delay each time
       );
       
       // Extract the insight from the response
       const responseContent = insightResponse.data.choices[0].message.content;
-      
-      // Check if response seems truncated (fewer than 50 tokens or less than 200 characters)
-      const tokenCount = insightResponse.data.usage.completion_tokens;
-      const isResponseTruncated = tokenCount < 50 || responseContent.length < 200;
-      
-      if (isResponseTruncated) {
-        console.warn(`Response appears truncated (${tokenCount} tokens). Retrying with modified prompt.`);
-        
-        // For career insights specifically, try a different approach if it's truncated
-        if (insightType === "career") {
-          console.log("Retrying with alternative career prompt formulation");
-          
-          // Different formulation of the career question
-          const careerPromptParts = prompt.split("Here is the birth chart data:");
-          const chartData = careerPromptParts[1];
-          const nameAndBirth = prompt.match(/for\s+([^.]+)\s+born\s+on\s+([^.]+)\s+at\s+([^.]+)\s+in\s+([^.]+)/);
-          
-          let alternativePrompt = "";
-          if (nameAndBirth) {
-            const [_, name, date, time, place] = nameAndBirth;
-            alternativePrompt = `Based on the natal chart of ${name} (DOB: ${date}, Time: ${time}, Place: ${place}), what are 3-5 career fields that would be most suitable? What professional strengths does this person likely possess? Here is the birth chart data: ${chartData}`;
-          } else {
-            // Fallback if regex doesn't match
-            alternativePrompt = `Based on this birth chart, list 3-5 suitable career paths and key professional strengths. ${chartData}`;
-          }
-          
-          // Try the alternative career prompt with exponential backoff
-          try {
-            const retryResponse = await this.retryWithExponentialBackoff(
-              async () => {
-                return await this.client.post('/api/together/chat', {
-                  model: "mistralai/Mixtral-8x7B-Instruct-v0.1", 
-                  messages: [
-                    {
-                      role: "system",
-                      content: "You are an expert astrologer specializing in career guidance based on birth charts."
-                    },
-                    {
-                      role: "user",
-                      content: alternativePrompt
-                    }
-                  ],
-                  temperature: 0.7,
-                  max_tokens: 10000
-                });
-              },
-              2, // Max 2 retries
-              3000, // Start with 3 second delay for alternative prompt
-              2 // Double the delay each time
-            );
-            
-            const insightContent = retryResponse.data.choices[0].message.content;
-            // Cache the response
-            cache.set(cacheKey, {
-              success: true,
-              data: {
-                insight: insightContent
-              }
-            });
-            
-            return insightContent;
-          } catch (specificRetryError: any) {
-            console.error("Career-specific retry also failed:", specificRetryError.message);
-          }
-        }
-        
-        // General retry for truncated responses with a simpler approach
-        const simplifiedPrompt = `${prompt.split('.')[0]}. Keep response very concise and focused.`;
-        
-        try {
-          const simplifiedResponse = await this.retryWithExponentialBackoff(
-            async () => {
-              return await this.client.post('/api/together/chat', {
-                model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-                messages: [
-                  {
-                    role: "system",
-                    content: systemPrompt
-                  },
-                  {
-                    role: "user",
-                    content: simplifiedPrompt
-                  }
-                ],
-                temperature: 0.7,
-                max_tokens: 10000
-              });
-            },
-            2, // Max 2 retries
-            2000, // Start with 2 second delay
-            2 // Double the delay each time
-          );
-          
-          const simplifiedContent = simplifiedResponse.data.choices[0].message.content;
-          
-          // Cache the simplified response
-          cache.set(cacheKey, {
-            success: true,
-            data: {
-              insight: simplifiedContent
-            }
-          });
-          
-          return simplifiedContent;
-        } catch (retryError: any) {
-          console.error("Simplified retry also failed:", retryError.message);
-          throw new Error(`Failed to generate insight: ${retryError.message}`);
-        }
-      }
       
       // Cache successful response
       cache.set(cacheKey, {
@@ -532,40 +431,45 @@ class ApiService {
       console.error('Error generating AI insight:', error);
       
       // If it times out or fails, retry with a simpler prompt
-      if (error.message && (error.message.includes('timeout') || error.response?.status === 504)) {
+      if (error.message && (error.message.includes('timeout') || error.response?.status === 504 || error.message.includes('FUNCTION_INVOCATION_TIMEOUT'))) {
         console.log('Request timed out. Retrying with simpler prompt...');
         
-        // Create a simpler version of the prompt
-        const simplifiedPrompt = `${prompt.split('.')[0]}. Keep it brief and focused.`;
+        // Create a simpler version of the prompt that focuses on just key aspects
+        let simplifiedPrompt = `${prompt.split('.')[0]}. Keep it very brief and focused.`;
+        
+        // If prompt is a complex astrological reading, ensure we still have structure
+        if (prompt.includes('astrological reading')) {
+          simplifiedPrompt = `Generate a concise astrological reading with only the most essential points. Include only Personality, Career, and Relationships sections with brief bullet points.`;
+        }
         
         try {
-          const retryResponse = await this.retryWithExponentialBackoff(
-            async () => {
-              return await this.client.post('/api/together/chat', {
-                model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-                messages: [
-                  {
-                    role: "system",
-                    content: systemPrompt
-                  },
-                  {
-                    role: "user",
-                    content: simplifiedPrompt
-                  }
-                ],
-                temperature: 0.7,
-                max_tokens: 10000
-              });
-            },
-            2, // Max 2 retries
-            3000, // Start with 3 second delay
-            2 // Double the delay each time
-          );
+          const retryResponse = await axios.post('/api/together/chat', {
+            model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            messages: [
+              {
+                role: "system",
+                content: "You are an expert Vedic astrologer. Provide very concise insights."
+              },
+              {
+                role: "user",
+                content: simplifiedPrompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 2000  // Significantly reduced token limit for timeout recovery
+          }, {
+            timeout: 25000,  // Shorter timeout for recovery attempt
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Request-Type': 'simplified-insight',
+              'X-Insight-Type': insightType
+            }
+          });
           
           const retryContent = retryResponse.data.choices[0].message.content;
           
           // Cache the retry response
-          const retryCacheKey = `insight_${insightType}_${simplifiedPrompt.substring(0, 50).replace(/\s+/g, '_').toLowerCase()}`;
+          const retryCacheKey = `insight_${insightType}_simplified_${new Date().getTime()}`;
           cache.set(retryCacheKey, {
             success: true,
             data: {
@@ -702,48 +606,70 @@ class ApiService {
       // Use the summarized version for AI requests
       const summarizedChartData = summarizeChartData(chartData);
       
-      // Break down the complex query into multiple smaller, focused queries
+      // Make a single comprehensive request instead of multiple segments
       try {
-        console.log('Breaking down complex astrological query into focused segments');
+        console.log('Making a single comprehensive astrological analysis request');
         
-        // Process requests sequentially with delays between each
-        // Get personality traits
-        const personalityPrompt = `Generate a personality reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on personality traits, strengths, and challenges. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const personalityInsight = await this.getAIInsight(personalityPrompt, "You are an expert Vedic astrologer.", "personality");
-        
-        // Add delay between requests
-        await this.delay(5000); // Increased from 1000ms to 5000ms
-        
-        // Get career insights - use different formulation for career specifically
-        const careerPrompt = `Generate a career reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on career prospects, professional strengths, and potential career paths. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const careerInsight = await this.getAIInsight(careerPrompt, "You are an expert Vedic astrologer specializing in career guidance based on birth charts.", "career");
-        
-        // Add delay between requests
-        await this.delay(5000); // Increased from 1000ms to 5000ms
-        
-        // Get relationship insights
-        const relationshipPrompt = `Generate a relationship reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus ONLY on relationship patterns, compatibility, and advice for relationships. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        const relationshipInsight = await this.getAIInsight(relationshipPrompt, "You are an expert Vedic astrologer specializing in relationship analysis.", "relationship");
-        
-        // Combine insights with headings
-        const combinedInsight = `
-# Astrological Reading for ${birthData.name}
+        // Create a prompt that requests all the information needed in a structured format
+        const comprehensivePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}.
 
-## Personality Insights
-${personalityInsight}
+Please structure your response with the following EXACT section headers:
+
+## Birth Chart Overview
+[Brief overview of the chart]
+
+## Personality Overview
+[Detailed analysis of personality traits, temperament, and overall character]
 
 ## Career Insights
-${careerInsight}
+[Career potential, professional strengths, suitable paths and industries]
 
-## Relationship Insights
-${relationshipInsight}
-`;
+## Relationship Patterns
+[Relationship style, compatibility factors, and partnership dynamics]
+
+## Key Strengths
+[List of 3-5 key strengths or positive qualities]
+
+## Potential Challenges
+[List of 3-5 challenges or growth areas]
+
+## Significant Chart Features
+[Notable placements, aspects, or configurations in the birth chart]
+
+Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
+
+        // Make single request with appropriate system prompt
+        const comprehensiveInsight = await this.retryWithExponentialBackoff(
+          async () => {
+            return await this.client.post('/api/together/chat', {
+              model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+              messages: [
+                {
+                  role: "system",
+                  content: "You are an expert Vedic astrologer providing comprehensive birth chart readings. Always include all the sections requested by the user with exactly the section headings specified. Be concise but insightful in each section."
+                },
+                {
+                  role: "user",
+                  content: comprehensivePrompt
+                }
+              ],
+              temperature: 0.7,
+              max_tokens: 10000
+            });
+          },
+          2, // Max 2 retries
+          1000, // Start with 1 second delay
+          3 // Triple the delay each time
+        );
+        
+        // Extract the insight from the response
+        const fullInsight = comprehensiveInsight.data.choices[0].message.content;
         
         // Create the response
         const response: ApiResponse = {
           success: true,
           data: {
-            insight: combinedInsight
+            insight: fullInsight
           }
         };
         
@@ -752,26 +678,34 @@ ${relationshipInsight}
         
         return response;
         
-      } catch (segmentError: any) {
-        console.error('Error with segmented approach, falling back to single request:', segmentError);
+      } catch (error: any) {
+        console.error('Error with comprehensive request:', error);
         
-        // Fallback to a single request but with simpler prompt
-        const fallbackPrompt = `Generate a concise astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. Focus on the most important insights only. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-        
-        const fallbackInsight = await this.getAIInsight(fallbackPrompt);
-        
-        // Create the response
-        const response: ApiResponse = {
-          success: true,
-          data: {
-            insight: fallbackInsight
-          }
-        };
-        
-        // Cache the response
-        cache.set(cacheKey, response);
-        
-        return response;
+        // Provide a simplified fallback with just the essential sections
+        try {
+          console.log('Attempting simplified fallback request');
+          const fallbackPrompt = `Generate a brief astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. 
+Include these exact headers: ## Personality Overview, ## Career Insights, ## Relationship Patterns. 
+Keep it simple and focused. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
+          
+          const fallbackInsight = await this.getAIInsight(fallbackPrompt);
+          
+          // Create the response
+          const response: ApiResponse = {
+            success: true,
+            data: {
+              insight: fallbackInsight
+            }
+          };
+          
+          // Cache the response
+          cache.set(cacheKey, response);
+          
+          return response;
+        } catch (fallbackError: any) {
+          console.error('Fallback request also failed:', fallbackError);
+          throw error; // Throw the original error
+        }
       }
       
     } catch (error: any) {
