@@ -135,6 +135,103 @@ export default async function handler(req, res) {
       max_tokens: Math.min(req.body.max_tokens || 10000, 10000), // Cap at 10000 tokens to respect model context limits
     };
     
+    // Detect complex astrological reading requests and optimize the prompt format
+    const isAstrologyRequest = requestData.messages.some(msg => 
+      msg.role === 'user' && 
+      (
+        msg.content.includes('astrological reading') || 
+        msg.content.includes('birth chart') || 
+        (msg.content.includes('Nakshatra') && msg.content.includes('birth'))
+      )
+    );
+    
+    if (isAstrologyRequest) {
+      console.log('Astrological reading request detected. Optimizing prompt format.');
+      
+      // Extract user message and parse for birth details
+      const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
+      
+      // Extract key information using regex
+      const nameMatch = userMessage.match(/for\s+([^(,\n]+)/i);
+      const birthDetailsMatch = userMessage.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i) || 
+                               userMessage.match(/(?:Date|DOB|Birth)[\s:]+([^,\n]+)(?:,|\s+|Time[\s:]+)([^,\n]+)(?:,|\s+|Place[\s:]+)([^.\n]+)/i);
+      
+      // Extract chart details if available
+      const chartDataStr = userMessage.includes('birth chart data') ? 
+                          userMessage.match(/birth chart data:?\s*(\{.*\})/s)?.[1] : null;
+      
+      // Parse JSON if available and extract key details
+      let chartInfo = '';
+      if (chartDataStr) {
+        try {
+          const chartData = JSON.parse(chartDataStr);
+          const nakshatra = chartData?.kundli?.data?.nakshatra_details?.nakshatra?.name || '';
+          const moonSign = chartData?.kundli?.data?.nakshatra_details?.chandra_rasi?.name || '';
+          const sunSign = chartData?.kundli?.data?.nakshatra_details?.soorya_rasi?.name || '';
+          const additionalInfo = chartData?.kundli?.data?.nakshatra_details?.additional_info || {};
+          const yogas = chartData?.kundli?.data?.yoga_details || [];
+          const mangalDosha = chartData?.kundli?.data?.mangal_dosha?.has_dosha === false ? 'No Mangal Dosha' : 'Has Mangal Dosha';
+          
+          chartInfo = `
+Nakshatra: ${nakshatra}
+Moon Sign: ${moonSign}
+Sun Sign: ${sunSign}
+Deity: ${additionalInfo.deity || ''}
+Birth Stone: ${additionalInfo.birth_stone || ''}
+Best Direction: ${additionalInfo.best_direction || ''}
+Yogas: ${yogas.map(y => y.name + ' - ' + y.description).join(', ').substring(0, 100)}
+${mangalDosha}`.trim();
+        } catch (e) {
+          console.error('Error parsing chart data JSON:', e.message);
+        }
+      } else {
+        // Try to extract chart info from text
+        const nakshatraMatch = userMessage.match(/Nakshatra[:\s-]+([^,.\n]+)/i);
+        const moonSignMatch = userMessage.match(/Moon(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
+        const sunSignMatch = userMessage.match(/Sun(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
+        const ascendantMatch = userMessage.match(/(?:Ascendant|Lagna)[:\s-]+([^,.\n]+)/i);
+        const yogasMatch = userMessage.match(/(?:yoga|yogas)[:\s-]+([^,.\n]+)/i);
+        const mangalMatch = userMessage.match(/Mangal[:\s-]+([^,.\n]+)/i);
+        
+        if (nakshatraMatch || moonSignMatch || sunSignMatch || ascendantMatch) {
+          chartInfo = `
+${nakshatraMatch ? `Nakshatra: ${nakshatraMatch[1].trim()}` : ''}
+${moonSignMatch ? `Moon Sign: ${moonSignMatch[1].trim()}` : ''}
+${sunSignMatch ? `Sun Sign: ${sunSignMatch[1].trim()}` : ''}
+${ascendantMatch ? `Ascendant: ${ascendantMatch[1].trim()}` : ''}
+${yogasMatch ? `Yogas: ${yogasMatch[1].trim()}` : ''}
+${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
+        }
+      }
+      
+      // Prepare a clean, optimized prompt for the astrological reading
+      const name = nameMatch ? nameMatch[1].trim() : 'the person';
+      const birthDate = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+      const birthTime = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
+      const birthPlace = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+      
+      const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} (born ${birthDate}, ${birthTime}, ${birthPlace}). ${chartInfo ? `\n\nBirth chart details:\n${chartInfo}` : ''}\n\nCover birth details, personality traits, career options (3), relationship patterns (3), key strengths (5), and challenges (5).`;
+      
+      const systemPrompt = "You are an expert Vedic astrologer providing concise readings.";
+      
+      // Update the request data with optimized prompts
+      requestData.messages = [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: optimizedPrompt
+        }
+      ];
+      
+      // Reduce max tokens for more reliable response
+      requestData.max_tokens = 2000;
+      
+      console.log('Optimized astrological reading prompt created.');
+    }
+    
     // Log request (without sensitive data)
     console.log(`API request: ${requestData.model}, ${requestData.messages.length} messages`);
     
@@ -150,7 +247,7 @@ export default async function handler(req, res) {
               'Authorization': `Bearer ${apiKey}`
             },
             data: requestData,
-            timeout: 150000 // 150 second timeout to stay within Vercel's function limits
+            timeout: 55000 // 55 second timeout to stay within Vercel's 60s function limit
           });
         },
         2, // Max 2 retries
@@ -174,6 +271,98 @@ export default async function handler(req, res) {
            msg.content.includes('job') ||
            msg.content.includes('occupation'))
         );
+
+        // Check if this is a complex astrology reading with multiple sections
+        const isComplexAstrologyReading = requestData.messages.some(msg => 
+          msg.role === 'user' && 
+          msg.content.includes('astrological reading') && 
+          msg.content.includes('section headers') &&
+          msg.content.includes('##')
+        );
+        
+        if (isComplexAstrologyReading) {
+          console.log('Complex astrology reading detected with truncated response. Applying special handling.');
+          
+          // Extract basic birth details from the request
+          const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
+          
+          // Extract name and birth details using regex if possible
+          const detailsMatch = userMessage.match(/for\s+([^.]+)\s+born\s+on\s+([^.]+)\s+at\s+([^.]+)\s+in\s+([^.]+)/);
+          let modifiedPrompt = '';
+          
+          if (detailsMatch) {
+            // If we can extract structured information
+            const [_, name, date, time, place] = detailsMatch;
+            
+            // Create a more direct prompt focused on essential information
+            modifiedPrompt = `Generate a concise birth chart reading for ${name} (born on ${date} at ${time} in ${place}). Include ONLY these sections with ## prefix:
+              
+## Birth Details
+## Birth Chart Overview (brief overview of key planetary positions)
+## Personality Overview (key traits)
+## Key Strengths (list 3 strengths)
+## Potential Challenges (list 3 challenges)
+
+Keep each section under 75 words.`;
+            
+            // Extract chart data if available
+            const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
+            if (chartDataMatch && chartDataMatch[1]) {
+              modifiedPrompt += ` Chart data: ${chartDataMatch[1]}`;
+            }
+          } else {
+            // Fallback to a simpler transformation
+            modifiedPrompt = userMessage.replace(/comprehensive/g, 'concise')
+                                      .replace(/following EXACT section headers.+?FORMATTING INSTRUCTIONS:/s, 'these key sections only: ## Birth Details, ## Birth Chart Overview, ## Personality Overview, ## Key Strengths (3 only), ## Potential Challenges (3 only).');
+          }
+          
+          // Create modified request with simplified system prompt
+          const modifiedRequest = {
+            ...requestData,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an expert Vedic astrologer. Provide concise, insightful birth chart readings. Focus on delivering essential insights within a limited space. Use ## for section headers and be direct and to the point.'
+              },
+              {
+                role: 'user',
+                content: modifiedPrompt
+              }
+            ],
+            max_tokens: 2000 // Use a smaller token limit for more reliability
+          };
+          
+          try {
+            console.log('Retrying with simplified astrology reading request');
+            
+            // Make the modified request with exponential backoff
+            const retryResponse = await retryWithExponentialBackoff(
+              async () => {
+                return await axios({
+                  method: 'POST',
+                  url: 'https://api.together.xyz/v1/chat/completions',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                  },
+                  data: modifiedRequest,
+                  timeout: 30000 // 30 second timeout for retry
+                });
+              },
+              1, // Max 1 retry to stay within time limits
+              2000, // Start with 2 second delay
+              2 // Double the delay each time
+            );
+            
+            console.log('Simplified astrology reading request successful');
+            
+            // Return the retry response
+            return res.status(200).json(retryResponse.data);
+          } catch (specialRetryError) {
+            console.error('Simplified astrology retry failed:', specialRetryError.message);
+            // Continue to normal response or fall through to other retry mechanisms
+          }
+        }
         
         if (isCareerQuery) {
           console.log('Career query detected with truncated response. Applying special handling.');
@@ -233,11 +422,11 @@ export default async function handler(req, res) {
                     'Authorization': `Bearer ${apiKey}`
                   },
                   data: modifiedRequest,
-                  timeout: 10000 // Shorter timeout for retry
+                  timeout: 30000 // 30 second timeout for retry
                 });
               },
-              2, // Max 2 retries
-              3000, // Start with 3 second delay
+              1, // Max 1 retry to stay within time limits
+              2000, // Start with 2 second delay
               2 // Double the delay each time
             );
             
@@ -299,11 +488,11 @@ export default async function handler(req, res) {
                   'Authorization': `Bearer ${apiKey}`
                 },
                 data: simplifiedRequest,
-                timeout: 10000 // Shorter timeout for retry
+                timeout: 30000 // 30 second timeout for retry
               });
             },
-            2, // Max 2 retries
-            3000, // Start with 3 second delay
+            1, // Max 1 retry to stay within time limits
+            2000, // Start with 2 second delay
             2 // Double the delay each time
           );
           

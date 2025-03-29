@@ -175,7 +175,7 @@ class ApiService {
               headers: {
                 'Content-Type': 'application/json',
               },
-              timeout: 15000
+              timeout: 150000
             });
           } else {
             // Use the configured client for relative URLs
@@ -477,48 +477,11 @@ class ApiService {
         
         // If prompt is a complex astrological reading, ensure we still have structure
         if (prompt.includes('astrological reading')) {
-          simplifiedPrompt = `Generate a detailed astrological reading with these exact section headers:
+          simplifiedPrompt = `Generate a detailed astrological reading for ${prompt.includes('for') ? prompt.split('for')[1].split('born')[0].trim() : 'the person'} ${prompt.includes('born') ? 'born' + prompt.split('born')[1].split('.')[0] : ''}.
 
-## Birth Details
-Date: [Extract from original query if possible]
-Time: [Extract from original query if possible]
-Place: [Extract from original query if possible]
+Include birth details, birth chart overview, personality traits, career options (3), relationship patterns (3), key strengths (5), challenges (5), and significant chart features.
 
-## Birth Chart Overview
-[Very brief overview]
-
-## Ascendant/Lagna
-[Brief information about rising sign]
-
-## Personality Overview
-[Brief personality traits]
-
-## Career Insights
-1. [First career insight]
-2. [Second career insight]
-3. [Third career insight]
-
-## Relationship Patterns
-1. [First relationship insight]
-2. [Second relationship insight]
-3. [Third relationship insight]
-
-## Key Strengths
-1. [First strength]
-2. [Second strength]
-3. [Third strength]
-
-## Potential Challenges
-1. [First challenge]
-2. [Second challenge]
-3. [Third challenge]
-
-## Significant Chart Features
-1. [First feature]
-2. [Second feature]
-3. [Third feature]
-
-IMPORTANT: Use exactly these section headers with ## prefix. Format lists as numbered items (1., 2., 3.). Do not use bold formatting or asterisks.`;
+Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
         }
         
         try {
@@ -697,61 +660,21 @@ IMPORTANT: Use exactly these section headers with ## prefix. Format lists as num
         // Create a prompt that requests all the information needed in a structured format
         const comprehensivePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}.
 
-Please structure your response with the following EXACT section headers (use exactly these headers with ## prefix):
+Birth chart details: ${JSON.stringify(summarizedChartData)}
 
-## Birth Details
-Date: ${birthData.date}
-Time: ${birthData.time}
-Place: ${birthData.place}
-Name: ${birthData.name}
+Include the following sections in your response:
 
-## Birth Chart Overview
-[Brief overview of the chart, including planetary positions and influences]
+Birth Details: Date, Time, Place, Name
+Birth Chart Overview: Brief overview of planetary positions and influences
+Ascendant/Lagna: Information about rising sign qualities and influence
+Personality Overview: Analysis of personality traits and character
+Career Insights: 3 specific insights about suitable career fields, strengths, and timing
+Relationship Patterns: 3 insights about compatibility, emotional needs, and communication
+Key Strengths: 5 primary strengths from the chart
+Potential Challenges: 5 potential difficulties or growth areas
+Significant Chart Features: 5 notable planetary configurations or yogas
 
-## Ascendant/Lagna
-[Information about the rising sign, its qualities, and influence on personality]
-
-## Personality Overview
-[Detailed analysis of personality traits, temperament, and overall character]
-
-## Career Insights
-1. [First career insight with specific career fields well-suited to this chart]
-2. [Second career insight with specific strengths in professional settings]
-3. [Third career insight about potential career path or timing of career success]
-
-## Relationship Patterns
-1. [First relationship insight about compatibility and approach to relationships]
-2. [Second relationship insight about emotional needs in partnerships]
-3. [Third relationship insight about communication style or challenges in relationships]
-
-## Key Strengths
-1. [First key strength]
-2. [Second key strength]
-3. [Third key strength]
-4. [Fourth key strength]
-5. [Fifth key strength]
-
-## Potential Challenges
-1. [First potential challenge]
-2. [Second potential challenge]
-3. [Third potential challenge]
-4. [Fourth potential challenge]
-5. [Fifth potential challenge]
-
-## Significant Chart Features
-1. [First significant chart feature - specific planetary position or aspect]
-2. [Second significant chart feature - important house placement]
-3. [Third significant chart feature - relevant yogas or doshas]
-4. [Fourth significant chart feature - unique aspect pattern]
-5. [Fifth significant chart feature - notable remedial measure if applicable]
-
-IMPORTANT FORMATTING INSTRUCTIONS:
-1. Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks - only use the ## prefix for headers.
-2. For Career Insights, Relationship Patterns, Key Strengths, Potential Challenges, and Significant Chart Features, format each point as a numbered list (1., 2., 3., etc.).
-3. Ensure each section has the exact number of points specified (5 for strengths/challenges/features, 3 for career/relationships).
-4. Do not combine multiple points into a single paragraph - each point should be distinct and separately numbered.
-
-Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
+For lists, use numbered format (1., 2., 3.). Keep points concise but meaningful. Focus on concrete insights rather than general statements.`;
 
         // Make single request with appropriate system prompt
         const comprehensiveInsight = await this.retryWithExponentialBackoff(
@@ -771,7 +694,7 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
                   messages: [
                     {
                       role: "system",
-                      content: "You are an expert Vedic astrologer providing comprehensive birth chart readings. Always include all the sections requested by the user with exactly the section headings specified. Be concise but insightful in each section. Always use the ## prefix for headings and never use bold formatting or asterisks for headers. Format lists as numbered items (1., 2., 3.) exactly as requested in the prompt."
+                      content: "You are an expert Vedic astrologer providing concise readings."
                     },
                     {
                       role: "user",
@@ -851,66 +774,24 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
           console.log('Attempting simplified fallback request');
           const fallbackPrompt = `Generate a brief astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}.
 
-IMPORTANT - INCLUDE ALL THESE SECTIONS WITH EXACT HEADERS:
+Birth chart information: ${JSON.stringify(summarizedChartData)}
 
-## Birth Details
-Date: ${birthData.date}
-Time: ${birthData.time}
-Place: ${birthData.place}
-Name: ${birthData.name}
+Include these sections:
+Birth Details: Date, Time, Place, Name
+Birth Chart Overview: Brief chart overview (2-3 sentences)
+Personality Overview: Key personality traits (3-4 sentences)
+Career Insights: 3 concise career points
+Relationship Patterns: 3 concise relationship insights
+Key Strengths: 5 primary strengths
+Potential Challenges: 5 potential challenges
+Significant Chart Features: 5 notable elements
 
-## Birth Chart Overview
-[Brief chart overview - no more than 2-3 sentences]
-
-## Ascendant/Lagna
-[Brief rising sign description - no more than 2-3 sentences]
-
-## Personality Overview
-[Brief personality description - no more than 3-4 sentences]
-
-## Career Insights
-1. [First concise career insight]
-2. [Second concise career insight]
-3. [Third concise career insight]
-
-## Relationship Patterns
-1. [First concise relationship insight]
-2. [Second concise relationship insight]
-3. [Third concise relationship insight]
-
-## Key Strengths
-1. [First strength]
-2. [Second strength]
-3. [Third strength]
-4. [Fourth strength]
-5. [Fifth strength]
-
-## Potential Challenges
-1. [First challenge]
-2. [Second challenge]
-3. [Third challenge]
-4. [Fourth challenge]
-5. [Fifth challenge]
-
-## Significant Chart Features
-1. [First chart feature]
-2. [Second chart feature]
-3. [Third chart feature]
-4. [Fourth chart feature]
-5. [Fifth chart feature]
-
-IMPORTANT INSTRUCTIONS:
-1. Use EXACTLY these section headers with the ## prefix
-2. Keep each point very concise (10-15 words maximum)
-3. Format lists with numbers (1., 2., 3.) exactly as shown
-4. Include ALL sections - this is critical
-
-Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
+Keep all points concise (10-15 words each) and use numbered format for lists (1., 2., 3.).`;
 
           // Try with progressive token increase for the fallback
           const fallbackInsight = await this.getAIInsight(
             fallbackPrompt, 
-            "You are an expert Vedic astrologer providing concise birth chart readings. Include ALL requested sections with EXACT headers shown. Give detailed insights.", 
+            "You are an expert Vedic astrologer providing concise readings.", 
             "comprehensive_fallback"
           );
           
