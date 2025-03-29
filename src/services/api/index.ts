@@ -619,6 +619,17 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
         ayanamsa: 1
       });
       
+      // Log the structure of the planet position response for debugging
+      console.log('Planet position API response structure:', 
+        planetPositionResponse.data ? 
+          `data: ${typeof planetPositionResponse.data}, ` + 
+          `data.data: ${planetPositionResponse.data.data ? 'exists' : 'missing'}, ` +
+          `planet_position: ${planetPositionResponse.data.data?.planet_position ? 
+            `array with ${planetPositionResponse.data.data.planet_position.length} items` : 
+            'missing'}`
+        : 'no data'
+      );
+      
       // Add a small delay before next request to prevent overloading
       await this.delay(500);
       
@@ -632,7 +643,7 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
       // Create the chart data summary for AI
       const chartData = {
         chart: chartResponse.data,
-        planets: planetPositionResponse.data?.planets || [],
+        planets: planetPositionResponse.data?.data?.planet_position || [],
         kundli: kundliResponse.data
       };
       
@@ -652,7 +663,7 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
           // Add rising sign/ascendant first if found
           const ascendant = data.planets.find((p: any) => p.name === 'Ascendant' || p.name === 'Lagna');
           if (ascendant) {
-            const sign = ascendant.zodiac || ascendant.sign || '';
+            const sign = ascendant.rasi?.name || ascendant.zodiac || ascendant.sign || '';
             if (sign) {
               planetPositionsText += `Rising Sign/Ascendant: ${sign}\n`;
             }
@@ -662,7 +673,7 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
           keyPlanets.forEach(planetName => {
             const planet = data.planets.find((p: any) => p.name === planetName);
             if (planet) {
-              const sign = planet.zodiac || planet.sign || '';
+              const sign = planet.rasi?.name || planet.zodiac || planet.sign || '';
               const degree = planet.longitude || planet.degree || '';
               const retrograde = planet.is_retrograde ? ' (Retrograde)' : '';
               
@@ -682,6 +693,9 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
           
           // Store the formatted planet positions
           summary.planetPositions = planetPositionsText;
+          console.log('Formatted planet positions for AI:', planetPositionsText);
+        } else {
+          console.warn('No planet position data available for AI prompt');
         }
         
         // Extract only essential information from chart data
@@ -715,8 +729,7 @@ Format lists with numbers (1., 2., 3.) and keep points concise but meaningful.`;
         // Create a prompt that requests all the information needed in a structured format
         const comprehensivePrompt = `Generate a comprehensive astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} IST in ${birthData.place}.
 
-Birth chart details:
-${summarizedChartData.planetPositions || JSON.stringify(summarizedChartData)}
+${summarizedChartData.planetPositions ? 'Planet Positions:\n' + summarizedChartData.planetPositions : 'Birth chart details:\n' + JSON.stringify(summarizedChartData)}
 
 Include the following sections in your response:
 
