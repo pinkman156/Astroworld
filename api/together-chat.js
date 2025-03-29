@@ -231,11 +231,7 @@ export default async function handler(req, res) {
       }
       
       // Prepare a clean, optimized prompt for the astrological reading
-      const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} (born ${birthDate}, ${birthTime} IST, ${birthPlace}). ${chartInfo ? `\n\nBirth chart details:\n${chartInfo}` : ''}
-
-When describing the birth chart, be sure to explicitly mention the Sun sign, Moon sign, and Ascendant/Lagna (e.g., "Sun in Gemini", "Moon in Scorpio", and "Ascendant/Lagna in Virgo") in the Birth Chart Overview section. Always clearly indicate the Rising sign or Ascendant.
-
-Cover birth details, personality traits, career options (3), relationship patterns (3), key strengths (5), and challenges (5).`;
+      const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} born on ${birthDate} at ${birthTime} IST in ${birthPlace}.   ${chartInfo ? `Planet Positions:   ${chartInfo}` : ''}   Include the following sections:   Birth Details: Date, Time, Place, Name   Birth Chart Overview: Brief overview with Sun, Moon, and Ascendant/Lagna signs   Ascendant/Lagna: Rising sign qualities and influence   Personality Overview: Analysis of personality traits   Career Insights: 3 specific insights about career   Relationship Patterns: 3 insights about relationships   Key Strengths: 5 primary strengths   Potential Challenges: 5 potential difficulties   Significant Chart Features: 5 notable configurations   For lists, use numbered format (1., 2., 3.). Keep points concise but meaningful.`;
       
       const systemPrompt = "You are an expert Vedic astrologer providing concise readings.";
       
@@ -320,15 +316,7 @@ Cover birth details, personality traits, career options (3), relationship patter
             const [_, name, date, time, place] = detailsMatch;
             
             // Create a more direct prompt focused on essential information
-            modifiedPrompt = `Generate a concise birth chart reading for ${name} (born on ${date} at ${time} in ${place}). Include ONLY these sections with ## prefix:
-              
-## Birth Details
-## Birth Chart Overview (brief overview of key planetary positions including Sun, Moon, and Ascendant/Lagna)
-## Personality Overview (key traits)
-## Key Strengths (list 3 strengths)
-## Potential Challenges (list 3 challenges)
-
-Keep each section under 75 words. Make sure to clearly mention the Ascendant/Rising sign in the Birth Chart Overview.`;
+            modifiedPrompt = `Generate a concise birth chart reading for ${name} born on ${date} at ${time} in ${place}.   Include these sections:   Birth Details: Date, Time, Place, Name   Birth Chart Overview: Key planetary positions including Sun, Moon, and Ascendant/Lagna   Personality Overview: Key traits   Key Strengths: 3 strengths   Potential Challenges: 3 challenges   Make sure to clearly mention the Ascendant/Rising sign. Keep each section brief and direct.`;
             
             // Extract chart data if available
             const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
@@ -404,7 +392,7 @@ Keep each section under 75 words. Make sure to clearly mention the Ascendant/Ris
             const [_, name, date, time, place] = detailsMatch;
             
             // Create a more direct prompt focused on listing career options
-            modifiedPrompt = `Based on the natal chart for ${name} (DOB: ${date}, Time: ${time}, Location: ${place}), please list exactly 5 suitable career fields and 3 professional strengths. Format as bullet points.`;
+            modifiedPrompt = `Based on the natal chart for ${name} born on ${date} at ${time} in ${place}, list exactly 5 suitable career fields and 3 professional strengths.   Use numbered format (1., 2., 3.) for clarity.   Be specific and focus on concrete career paths based on astrological indicators.`;
             
             // Extract chart data if available
             const chartDataMatch = userMessage.match(/birth chart data:\s*(\{.*\})/);
@@ -618,8 +606,8 @@ function formatPlanetPositions(planets) {
     
     console.log(`Formatting ${planets.length} planets`);
     
-    // Start building the formatted text
-    let formattedText = '';
+    // Create an array to hold formatted planet positions
+    const positions = [];
     
     // Important planets to highlight first (in order of importance for astrology)
     const keyPlanets = ['Sun', 'Moon', 'Ascendant', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
@@ -639,7 +627,7 @@ function formatPlanetPositions(planets) {
     
     // Add rising sign/ascendant first if found
     if (ascendantSign) {
-      formattedText += `Rising Sign/Ascendant: ${ascendantSign}\n`;
+      positions.push(`Rising Sign/Ascendant: ${ascendantSign}`);
     }
     
     // Add key planets in specific order
@@ -647,12 +635,11 @@ function formatPlanetPositions(planets) {
       const planet = planets.find(p => p.name === planetName);
       if (planet) {
         const sign = planet.zodiac || planet.sign || '';
-        const degree = planet.longitude || planet.degree || '';
         const retrograde = planet.is_retrograde ? ' (Retrograde)' : '';
         
         // Only add if we have sign information
         if (sign) {
-          formattedText += `${planetName}: ${sign}${degree ? ` at ${degree}°` : ''}${retrograde}\n`;
+          positions.push(`${planetName}: ${sign}${retrograde}`);
         }
       }
     });
@@ -660,14 +647,17 @@ function formatPlanetPositions(planets) {
     // Add nakshatra information if available
     planets.forEach(planet => {
       if ((planet.name === 'Moon' || planet.name === 'Sun') && planet.nakshatra) {
-        formattedText += `${planet.name} Nakshatra: ${planet.nakshatra}\n`;
+        positions.push(`${planet.name} Nakshatra: ${planet.nakshatra}`);
       }
     });
+    
+    // Join with triple spaces for better formatting
+    const formattedText = positions.join('   ');
     
     // Log the formatted text for debugging
     console.log(`Formatted planet positions: ${formattedText.substring(0, 100)}...`);
     
-    return formattedText.trim();
+    return formattedText;
   } catch (error) {
     console.error(`Error formatting planet positions: ${error.message}`);
     return ''; // Return empty string on error
@@ -687,13 +677,18 @@ function extractChartInfoFromText(userMessage) {
   const mangalMatch = userMessage.match(/Mangal[:\s-]+([^,.\n]+)/i);
   
   if (nakshatraMatch || moonSignMatch || sunSignMatch || ascendantMatch) {
-    let chartInfo = `
-${ascendantMatch ? `Rising Sign/Ascendant: ${ascendantMatch[1].trim()}` : ''}
-${sunSignMatch ? `Sun: ${sunSignMatch[1].trim()}` : ''}
-${moonSignMatch ? `Moon: ${moonSignMatch[1].trim()}` : ''}
-${nakshatraMatch ? `Moon Nakshatra: ${nakshatraMatch[1].trim()}` : ''}
-${yogasMatch ? `Yogas: ${yogasMatch[1].trim()}` : ''}
-${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
+    // Create a clean array of planet positions
+    const positions = [];
+    
+    if (ascendantMatch) positions.push(`Rising Sign/Ascendant: ${ascendantMatch[1].trim()}`);
+    if (sunSignMatch) positions.push(`Sun: ${sunSignMatch[1].trim()}`);
+    if (moonSignMatch) positions.push(`Moon: ${moonSignMatch[1].trim()}`);
+    if (nakshatraMatch) positions.push(`Moon Nakshatra: ${nakshatraMatch[1].trim()}`);
+    if (yogasMatch) positions.push(`Yogas: ${yogasMatch[1].trim()}`);
+    if (mangalMatch) positions.push(`Mangal Dosha: ${mangalMatch[1].trim()}`);
+    
+    // Join with double spaces for better formatting
+    const chartInfo = positions.join('   ');
     
     console.log(`Successfully extracted chart info from text: ${chartInfo.substring(0, 100)}...`);
     return chartInfo;
@@ -710,11 +705,11 @@ ${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
           const data = chartData.kundli.data;
           
           // Convert kundli data format to planet positions format
-          let chartInfo = '';
+          const positions = [];
           
           // Add rising sign/ascendant if available
           if (data.ascendant?.sign) {
-            chartInfo += `Rising Sign/Ascendant: ${data.ascendant.sign}\n`;
+            positions.push(`Rising Sign/Ascendant: ${data.ascendant.sign}`);
           }
           
           // Add planets
@@ -725,34 +720,37 @@ ${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
             keyPlanets.forEach(planetName => {
               const planet = data.planets.find(p => p.name === planetName);
               if (planet) {
-                chartInfo += `${planetName}: ${planet.sign}${planet.retrograde ? ' (Retrograde)' : ''}\n`;
+                positions.push(`${planetName}: ${planet.sign}${planet.retrograde ? ' (Retrograde)' : ''}`);
               }
             });
           } else {
             // Alternative way to extract planet info if planets array not available
             if (data.nakshatra_details?.soorya_rasi?.name) {
-              chartInfo += `Sun: ${data.nakshatra_details.soorya_rasi.name}\n`;
+              positions.push(`Sun: ${data.nakshatra_details.soorya_rasi.name}`);
             }
             if (data.nakshatra_details?.chandra_rasi?.name) {
-              chartInfo += `Moon: ${data.nakshatra_details.chandra_rasi.name}\n`;
+              positions.push(`Moon: ${data.nakshatra_details.chandra_rasi.name}`);
             }
             if (data.nakshatra_details?.nakshatra?.name) {
-              chartInfo += `Moon Nakshatra: ${data.nakshatra_details.nakshatra.name}\n`;
+              positions.push(`Moon Nakshatra: ${data.nakshatra_details.nakshatra.name}`);
             }
           }
           
           // Add Yogas if available
           if (data.yoga_details && Array.isArray(data.yoga_details) && data.yoga_details.length > 0) {
-            chartInfo += `Yogas: ${data.yoga_details.map(y => y.name).join(', ')}\n`;
+            positions.push(`Yogas: ${data.yoga_details.map(y => y.name).join(', ')}`);
           }
           
           // Add Mangal Dosha if available
           if (data.mangal_dosha) {
-            chartInfo += `Mangal Dosha: ${data.mangal_dosha.has_dosha ? 'Yes' : 'No'}\n`;
+            positions.push(`Mangal Dosha: ${data.mangal_dosha.has_dosha ? 'Yes' : 'No'}`);
           }
           
+          // Join with double spaces for better formatting
+          const chartInfo = positions.join('   ');
+          
           console.log(`Successfully converted kundli data to planet positions format: ${chartInfo.substring(0, 100)}...`);
-          return chartInfo.trim();
+          return chartInfo;
         }
       }
     } catch (error) {
