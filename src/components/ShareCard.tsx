@@ -242,30 +242,43 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
   
   // Extract the name from birth details
   const extractName = (): string => {
-    const nameMatch = insight.message.match(/Name: ([^\n]+)/);
-    return nameMatch ? nameMatch[1].trim() : 'Your';
+    const nameMatch = insight.message.match(/Name:?\s*([^\n]+)/i) || 
+                      insight.message.match(/reading for\s+([^(,.\n]+)/i);
+    
+    const extractedName = nameMatch ? nameMatch[1].trim() : '';
+    
+    // Use a proper display name - never empty, no apostrophe issues
+    return extractedName || 'Your';
   };
   
   const name = extractName();
+  // Ensure no apostrophe in possessive 
+  const displayPossessive = name === 'Your' ? 'Your' : `${name}'s`;
   
   // Extract personality overview
   const extractPersonality = (): string => {
     // First try with ## format
     const headeredMatch = insight.message.match(/## Personality Overview\n([^\n#]+)/);
-    if (headeredMatch) {
+    if (headeredMatch && headeredMatch[1].trim().length > 5) {
       return headeredMatch[1].trim();
     }
     
     // Try the new format without ## (Personality Overview: text)
     const colonMatch = insight.message.match(/Personality Overview:([^.]+)\./i);
-    if (colonMatch) {
+    if (colonMatch && colonMatch[1].trim().length > 5) {
       return colonMatch[1].trim();
     }
     
     // Try to find a section that starts with "Personality Overview" anywhere
     const sectionMatch = insight.message.match(/Personality Overview(?:[\s\n]*)([^.]+)\./i);
-    if (sectionMatch) {
+    if (sectionMatch && sectionMatch[1].trim().length > 5) {
       return sectionMatch[1].trim();
+    }
+    
+    // Try to extract from numbered list in personality section
+    const listMatch = insight.message.match(/Personality Overview(?:[\s\S]*?)(?:1\.|\d+\.\s+|\*\s+|\-\s+)([^.\n]+)/i);
+    if (listMatch && listMatch[1].trim().length > 5) {
+      return listMatch[1].trim();
     }
     
     // Try to extract first line or paragraph from a personality overview section
@@ -278,8 +291,14 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
       }
     }
     
+    // Extract any meaningful personality trait from the text
+    const traitMatch = insight.message.match(/(?:individual|person|native|subject)\s+(?:is|has|possesses)\s+([^.]+)\./i);
+    if (traitMatch && traitMatch[1].trim().length > 5) {
+      return traitMatch[1].trim();
+    }
+    
     // Fallback
-    return 'Cosmic insights await you';
+    return 'A balanced individual with unique cosmic energy';
   };
   
   const personalityText = extractPersonality();
@@ -716,7 +735,7 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                       fontFamily: '"Courier New", Courier, monospace'
                     }}
                   >
-                    {name}'s Cosmic Card
+                    {displayPossessive} Cosmic Card
                   </Typography>
                   
                   <Box sx={{ 
