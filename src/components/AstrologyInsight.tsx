@@ -390,12 +390,55 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                           insight.message.match(/Personality Overview:([\s\S]*?)(?=Career|Relationship|Key Strengths|$)/i);
                   const personalityText = personalityMatch ? personalityMatch[1].trim() : '';
                   
-                  // For numbered format in the clean response
-                  let formattedText = personalityText;
-                  if (personalityText.match(/^\d+\./m)) {
-                    // It's a numbered list - format it nicely
-                    formattedText = personalityText.split(/\d+\./).map(item => item.trim()).filter(Boolean).join('\n\n• ');
-                    formattedText = '• ' + formattedText;
+                  // Parse the points from the personality text
+                  const parsePersonalityPoints = (text: string): string[] => {
+                    if (!text) return [];
+                    
+                    // If it's a numbered list format
+                    if (/\d+\./.test(text)) {
+                      return text.split(/\d+\./)
+                        .map(point => point.trim())
+                        .filter(point => point.length > 0);
+                    }
+                    
+                    // Otherwise split by lines
+                    return text.split(/\n+/)
+                      .map(line => line.trim())
+                      .filter(line => line.length > 0);
+                  };
+                  
+                  const personalityPoints = parsePersonalityPoints(personalityText);
+                  
+                  // Create a single concise overview from the points
+                  let personalityOverview = "";
+                  
+                  if (personalityPoints.length > 0) {
+                    // Use the first point as the base or combine a few key traits
+                    const keyTraits = personalityPoints.slice(0, Math.min(3, personalityPoints.length))
+                      .map(point => {
+                        // Extract the core part of each point, removing any numbering or formatting
+                        return point.replace(/^[-•*\d.]+\s*/, '').trim()
+                          .replace(/^(You are|The individual is|The native is|The person is)\s+/i, '')
+                          .split('.')[0]; // Take just the first sentence
+                      });
+                    
+                    // Form a concise personality description
+                    if (keyTraits.length === 1) {
+                      personalityOverview = keyTraits[0];
+                    } else {
+                      // Combine multiple traits into one sentence
+                      const lastTrait = keyTraits.pop();
+                      personalityOverview = `${keyTraits.join(', ')}${keyTraits.length > 0 ? ' and ' : ''}${lastTrait}`;
+                    }
+                    
+                    // Ensure it starts with a capital letter and ends with a period
+                    personalityOverview = personalityOverview.charAt(0).toUpperCase() + personalityOverview.slice(1);
+                    if (!personalityOverview.endsWith('.')) {
+                      personalityOverview += '.';
+                    }
+                  } else {
+                    // Fallback if no points found
+                    personalityOverview = "A balanced individual with unique strengths in communication, adaptability, and emotional intelligence.";
                   }
                   
                   return (
@@ -424,8 +467,15 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                             </Box>
                             <CardContent sx={{ p: 2, bgcolor: 'rgba(13, 18, 35, 0.8)' }}>
                               <Paper sx={{ p: 2, bgcolor: 'rgba(16, 185, 129, 0.2)' }}>
-                                <Typography sx={{ color: 'rgba(255, 255, 255, 0.9)', fontStyle: 'italic', lineHeight: 1.8, whiteSpace: 'pre-line' }}>
-                                  {formattedText}
+                                <Typography sx={{ 
+                                  color: 'rgba(255, 255, 255, 0.9)', 
+                                  fontStyle: 'italic', 
+                                  lineHeight: 1.8,
+                                  fontSize: '1.05rem',
+                                  textAlign: 'center',
+                                  fontWeight: 500
+                                }}>
+                                  {personalityOverview}
                                 </Typography>
                               </Paper>
                             </CardContent>
@@ -769,8 +819,28 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                     {/* Render with proper styling if it contains a colon */}
                                     {point.includes(':') ? (
                                       <>
-                                        <span style={{ fontWeight: 700, color: "#10B981", fontSize: "1.05rem", display: "block", marginBottom: "4px" }}>{point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}</span>
+                                        <span style={{ 
+                                          fontWeight: 700, 
+                                          color: "#10B981", 
+                                          fontSize: "1.05rem", 
+                                          display: "block", 
+                                          marginBottom: "4px" 
+                                        }}>
+                                          {point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}
+                                        </span>
                                         <span>{': ' + point.split(':').slice(1).join(':').trim()}</span>
+                                      </>
+                                    ) : (/\d+\./).test(point) ? (
+                                      // Handle case where a point starts with a number followed by period (likely mixed with other points)
+                                      // Split the point by number markers and render each as a separate paragraph
+                                      <>
+                                        {point.split(/\s+\d+\.\s+/).filter(p => p.trim()).map((subPoint, idx) => (
+                                          <p key={idx} style={{ 
+                                            marginBottom: idx < point.split(/\s+\d+\.\s+/).filter(p => p.trim()).length - 1 ? '8px' : '0' 
+                                          }}>
+                                            {subPoint.trim().replace(/^[.•*-]+\s*/g, '')}
+                                          </p>
+                                        ))}
                                       </>
                                     ) : point.includes('"') ? (
                                       <>
@@ -838,8 +908,28 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                     {/* Render with proper styling if it contains a colon */}
                                     {point.includes(':') ? (
                                       <>
-                                        <span style={{ fontWeight: 700, color: "#10B981", fontSize: "1.05rem", display: "block", marginBottom: "4px" }}>{point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}</span>
+                                        <span style={{ 
+                                          fontWeight: 700, 
+                                          color: "#10B981", 
+                                          fontSize: "1.05rem", 
+                                          display: "block", 
+                                          marginBottom: "4px" 
+                                        }}>
+                                          {point.split(':')[0].trim().replace(/^[.•*-]+\s*/g, '')}
+                                        </span>
                                         <span>{': ' + point.split(':').slice(1).join(':').trim()}</span>
+                                      </>
+                                    ) : (/\d+\./).test(point) ? (
+                                      // Handle case where a point starts with a number followed by period (likely mixed with other points)
+                                      // Split the point by number markers and render each as a separate paragraph
+                                      <>
+                                        {point.split(/\s+\d+\.\s+/).filter(p => p.trim()).map((subPoint, idx) => (
+                                          <p key={idx} style={{ 
+                                            marginBottom: idx < point.split(/\s+\d+\.\s+/).filter(p => p.trim()).length - 1 ? '8px' : '0' 
+                                          }}>
+                                            {subPoint.trim().replace(/^[.•*-]+\s*/g, '')}
+                                          </p>
+                                        ))}
                                       </>
                                     ) : point.includes('"') ? (
                                       <>
