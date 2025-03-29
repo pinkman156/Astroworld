@@ -359,6 +359,8 @@ export default async function handler(req, res) {
         .replace(/(\d+\.\d+)\s*degrees/gi, '')
         .replace(/(\w+)\s+is\s+in\s+(\w+)\s+at\s+\d+\.\d+°/gi, '$1 is in $2')
         .replace(/(\w+):\s+(\w+)\s+at\s+\d+\.\d+°/gi, '$1: $2')
+        .replace(/\n+/g, ' ')
+        .replace(/<[^>]*>/g, '')
         .trim();
 
       console.log('Optimized prompt:', optimizedPrompt);

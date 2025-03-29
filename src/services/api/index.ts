@@ -404,7 +404,7 @@ class ApiService {
     // Remove all other coordinates
     cleanedPrompt = cleanedPrompt
       // Remove newline characters and HTML tags
-      .replace(/\\n/g, ' ')
+      .replace(/\n+/g, ' ')
       .replace(/<[^>]*>/g, '')
       .replace(atDegreePattern, '')
       .replace(atDecimalPattern, '')
@@ -414,6 +414,7 @@ class ApiService {
       .replace(/([A-Za-z]+)\s+\d+\.\d+°/g, '$1')
       // Clean any decimal followed by degree symbol
       .replace(/\d+\.\d+°/g, '');
+
     
     // Check for any remaining coordinates
     const remainingCoords = cleanedPrompt.match(/\d+\.\d+°/g);
@@ -423,6 +424,7 @@ class ApiService {
     }
     
     console.log('Astrological prompt coordinates cleaned successfully');
+    console.log('Cleaned prompt:', cleanedPrompt);
     return cleanedPrompt;
   }
 
