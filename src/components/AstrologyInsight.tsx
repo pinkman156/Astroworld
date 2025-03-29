@@ -243,19 +243,35 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                 {(() => {
                   // Extract birth details section
                   const birthDetailsMatch = insight.message.match(/## Birth Data([\s\S]*?)(?=##|$)/) || 
-                                           insight.message.match(/## Birth Details([\s\S]*?)(?=##|$)/);
-                  const birthDetailsText = birthDetailsMatch ? birthDetailsMatch[1] : '';
+                                           insight.message.match(/## Birth Details([\s\S]*?)(?=##|$)/) ||
+                                           insight.message.match(/Birth Details:([\s\S]*?)(?=Birth Chart|Ascendant|Personality|$)/i);
+                  const birthDetailsText = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+                  
+                  console.log("Birth details section:", birthDetailsText);
                   
                   // Extract specific details with improved parsing
-                  const nameMatch = birthDetailsText.match(/Name: (.+?)(?:\r?\n|-|$)/);
-                  const dateMatch = birthDetailsText.match(/(?:Birth )?Date: (.+?)(?:\r?\n|-|$)/);
-                  const timeMatch = birthDetailsText.match(/(?:Birth )?Time: (.+?)(?:\r?\n|-|$)/);
-                  const placeMatch = birthDetailsText.match(/(?:Birth )?Place: (.+?)(?:\r?\n|-|$)/);
+                  const nameMatch = birthDetailsText.match(/Name:?\s*(.+?)(?:\r?\n|$)/i) || 
+                                    birthDetailsText.match(/Name of ([^:]+?)(?:\r?\n|$)/i) ||
+                                    insight.message.match(/Name:?\s*(.+?)(?:\r?\n|$)/i);
+                                    
+                  const dateMatch = birthDetailsText.match(/(?:Birth |Date of )?Date:?\s*(.+?)(?:\r?\n|$)/i) || 
+                                    birthDetailsText.match(/Date of Birth:?\s*(.+?)(?:\r?\n|$)/i) ||
+                                    insight.message.match(/Date of Birth:?\s*(.+?)(?:\r?\n|$)/i);
+                                    
+                  const timeMatch = birthDetailsText.match(/(?:Birth |Time of )?Time:?\s*(.+?)(?:\r?\n|$)/i) || 
+                                    birthDetailsText.match(/Time of Birth:?\s*(.+?)(?:\r?\n|$)/i) ||
+                                    insight.message.match(/Time of Birth:?\s*(.+?)(?:\r?\n|$)/i);
+                                    
+                  const placeMatch = birthDetailsText.match(/(?:Birth |Place of )?Place:?\s*(.+?)(?:\r?\n|$)/i) || 
+                                     birthDetailsText.match(/Place of Birth:?\s*(.+?)(?:\r?\n|$)/i) ||
+                                     insight.message.match(/Place of Birth:?\s*(.+?)(?:\r?\n|$)/i);
                   
                   const name = nameMatch ? nameMatch[1].trim() : '';
                   const date = dateMatch ? dateMatch[1].trim() : '';
                   const time = timeMatch ? timeMatch[1].trim() : '';
                   const place = placeMatch ? placeMatch[1].trim() : '';
+                  
+                  console.log(`Extracted Birth Details - Name: ${name}, Date: ${date}, Time: ${time}, Place: ${place}`);
                   
                   return (
                     <motion.div 
@@ -366,10 +382,62 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                   );
                 })()}
                 
+                {/* Personality Overview Dashboard */}
+                {(() => {
+                  // Extract Personality Overview section
+                  const personalityMatch = insight.message.match(/## Personality Overview([\s\S]*?)(?=##|$)/) || 
+                                          insight.message.match(/Personality Overview:([\s\S]*?)(?=Career|Relationship|Key Strengths|$)/i);
+                  const personalityText = personalityMatch ? personalityMatch[1].trim() : '';
+                  
+                  // For numbered format in the clean response
+                  let formattedText = personalityText;
+                  if (personalityText.match(/^\d+\./m)) {
+                    // It's a numbered list - format it nicely
+                    formattedText = personalityText.split(/\d+\./).map(item => item.trim()).filter(Boolean).join('\n\n• ');
+                    formattedText = '• ' + formattedText;
+                  }
+                  
+                  return (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.3 }}
+                          whileHover={{ y: -5 }}
+                        >
+                          <Card sx={{ 
+                            overflow: 'hidden', 
+                            boxShadow: '0 4px 24px rgba(0,0,0,0.4)', 
+                            mb: 3,
+                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(20, 184, 166, 0.25) 100%)',
+                            border: '1px solid rgba(16, 185, 129, 0.35)'
+                          }}>
+                            <Box sx={{ 
+                              p: 2, 
+                              background: 'linear-gradient(90deg, #059669 0%, #0D9488 100%)', 
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              py: 1.5
+                            }}>
+                              <Typography variant="h6" fontWeight={500}>Personality Overview</Typography>
+                            </Box>
+                            <CardContent sx={{ p: 2, bgcolor: 'rgba(13, 18, 35, 0.8)' }}>
+                              <Paper sx={{ p: 2, bgcolor: 'rgba(16, 185, 129, 0.2)' }}>
+                                <Typography sx={{ color: 'rgba(255, 255, 255, 0.9)', fontStyle: 'italic', lineHeight: 1.8, whiteSpace: 'pre-line' }}>
+                                  {formattedText}
+                                </Typography>
+                              </Paper>
+                            </CardContent>
+                          </Card>
+                    </motion.div>
+                  );
+                })()}
+                
                 {/* Ascendant/Lagna Dashboard */}
                 {(() => {
                   // Extract Ascendant section
-                  const ascendantMatch = insight.message.match(/## Ascendant\/Lagna([\s\S]*?)(?=##|$)/);
+                  const ascendantMatch = insight.message.match(/## Ascendant\/Lagna([\s\S]*?)(?=##|$)/) ||
+                                        insight.message.match(/Ascendant\/Lagna:([\s\S]*?)(?=Personality|Birth Chart|Career|$)/i);
                   const ascendantText = ascendantMatch ? ascendantMatch[1].trim() : '';
                   
                   console.log('Ascendant text extracted:', ascendantText);
@@ -469,59 +537,22 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                   );
                 })()}
                 
-                {/* Personality Overview Dashboard */}
-                {(() => {
-                  // Extract Personality Overview section
-                  const personalityMatch = insight.message.match(/## Personality Overview([\s\S]*?)(?=##|$)/);
-                  const personalityText = personalityMatch ? personalityMatch[1].trim() : '';
-                  
-                  return (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.3 }}
-                          whileHover={{ y: -5 }}
-                        >
-                          <Card sx={{ 
-                            overflow: 'hidden', 
-                            boxShadow: '0 4px 24px rgba(0,0,0,0.4)', 
-                            mb: 3,
-                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(20, 184, 166, 0.25) 100%)',
-                            border: '1px solid rgba(16, 185, 129, 0.35)'
-                          }}>
-                            <Box sx={{ 
-                              p: 2, 
-                              background: 'linear-gradient(90deg, #059669 0%, #0D9488 100%)', 
-                              color: 'white',
-                              display: 'flex',
-                              alignItems: 'center',
-                              py: 1.5
-                            }}>
-                              <Typography variant="h6" fontWeight={500}>Personality Overview</Typography>
-                            </Box>
-                            <CardContent sx={{ p: 2, bgcolor: 'rgba(13, 18, 35, 0.8)' }}>
-                              <Paper sx={{ p: 2, bgcolor: 'rgba(16, 185, 129, 0.2)' }}>
-                                <Typography sx={{ color: 'rgba(255, 255, 255, 0.9)', fontStyle: 'italic', lineHeight: 1.8 }}>
-                                  {personalityText}
-                                </Typography>
-                              </Paper>
-                            </CardContent>
-                          </Card>
-                    </motion.div>
-                  );
-                })()}
-
                 {/* Career & Relationships Dashboard */}
                 {(() => {
                   // Extract Career Insights section
                   const careerMatch = insight.message.match(/## Career Insights([\\s\\S]*?)(?=##|$)/i) || 
-                                     insight.message.match(/Career\\s+(?:Insights|Path|Options|Potential):?([\\s\\S]*?)(?=Relationship|Personality|Key Strengths|$)/i);
+                                     insight.message.match(/Career\\s+(?:Insights|Path|Options|Potential):?([\\s\\S]*?)(?=Relationship|Personality|Key Strengths|$)/i) ||
+                                     insight.message.match(/Career Insights:([\s\S]*?)(?=Relationship|Key Strengths|$)/i);
                   const careerText = careerMatch ? careerMatch[1].trim() : '';
                   
                   // Extract Relationship Patterns section
                   const relationshipMatch = insight.message.match(/## Relationship Patterns([\\s\\S]*?)(?=##|$)/i) || 
-                                           insight.message.match(/Relationship\\s+(?:Patterns|Tendencies|Compatibility):?([\\s\\S]*?)(?=Key Strengths|Personality|Career|Significant|Potential|$)/i);
+                                           insight.message.match(/Relationship\\s+(?:Patterns|Tendencies|Compatibility):?([\\s\\S]*?)(?=Key Strengths|Personality|Career|Significant|Potential|$)/i) ||
+                                           insight.message.match(/Relationship Patterns:([\s\S]*?)(?=Key Strengths|$)/i);
                   const relationshipText = relationshipMatch ? relationshipMatch[1].trim() : '';
+                  
+                  console.log('Career text:', careerText);
+                  console.log('Relationship text:', relationshipText);
                   
                   // Improved parsing for numbered lists and bullet points
                   const parsePoints = (text: string): string[] => {
@@ -531,12 +562,19 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                     console.log('Parsing text:', text);
                     
                     // Check for numbered list format (1., 2., 3., etc.)
-                    const numberedListRegex = /(?:^|\\n)\\s*\\d+\\.?\\s*([^\\n]+)/g;
+                    // This version handles both lines starting with numbers and inline numbered lists
+                    const numberedListRegex = /(?:^|\\n|\\s)\\s*\\d+\\.\\s*([^\\d\\n.][^\\n]+)(?=\\n|\\d+\\.|$)/g;
                     const numberedMatches = Array.from(text.matchAll(numberedListRegex));
                     
                     if (numberedMatches && numberedMatches.length > 0) {
                       console.log('Found numbered list with', numberedMatches.length, 'items');
                       return numberedMatches.map(match => match[1].trim());
+                    }
+                    
+                    // Simple check for lines starting with numbers (1. 2. 3.) with no additional formatting
+                    const simpleNumbered = text.split(/\\n/).map(line => line.trim()).filter(line => /^\d+\./.test(line));
+                    if (simpleNumbered.length > 0) {
+                      return simpleNumbered.map(line => line.replace(/^\d+\.\s*/, '').trim());
                     }
                     
                     // Try to find items with line breaks between them
@@ -807,13 +845,18 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                 {(() => {
                   // Extract Key Strengths section
                   const strengthsMatch = insight.message.match(/## Key Strengths([\\s\\S]*?)(?=##|$)/i) || 
-                                        insight.message.match(/(?:Key\\s+)?Strengths:?([\\s\\S]*?)(?=Potential|Challenges|Significant|Career|Relationship|$)/i);
+                                        insight.message.match(/(?:Key\\s+)?Strengths:?([\\s\\S]*?)(?=Potential|Challenges|Significant|Career|Relationship|$)/i) ||
+                                        insight.message.match(/Key Strengths:([\s\S]*?)(?=Potential|Challenges|$)/i);
                   const strengthsText = strengthsMatch ? strengthsMatch[1].trim() : '';
                   
                   // Extract Potential Challenges section  
                   const challengesMatch = insight.message.match(/## Potential Challenges([\\s\\S]*?)(?=##|$)/i) || 
-                                         insight.message.match(/(?:Potential\\s+)?Challenges:?([\\s\\S]*?)(?=Significant|Key|Strengths|Career|$)/i);
+                                         insight.message.match(/(?:Potential\\s+)?Challenges:?([\\s\\S]*?)(?=Significant|Key|Strengths|Career|$)/i) ||
+                                         insight.message.match(/Potential Challenges:([\s\S]*?)(?=Significant|$)/i);
                   const challengesText = challengesMatch ? challengesMatch[1].trim() : '';
+                  
+                  console.log('Strengths text:', strengthsText);
+                  console.log('Challenges text:', challengesText);
                   
                   // Improved parsing for bullet points that might be on one line
                   const parsePoints = (text: string): string[] => {
@@ -1034,7 +1077,8 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                 {(() => {
                   // Extract Significant Chart Features section
                   const chartFeaturesMatch = insight.message.match(/## Significant Chart Features([\\s\\S]*?)(?=##|$)/i) || 
-                                           insight.message.match(/(?:Significant\\s+)?Chart\\s+Features:?([\\s\\S]*?)(?=$)/i);
+                                           insight.message.match(/(?:Significant\\s+)?Chart\\s+Features:?([\\s\\S]*?)(?=$)/i) ||
+                                           insight.message.match(/Significant Chart Features:([\s\S]*?)$/i);
                   const chartFeaturesText = chartFeaturesMatch ? chartFeaturesMatch[1].trim() : '';
                   
                   console.log('Chart features text extracted:', chartFeaturesText);
