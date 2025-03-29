@@ -535,7 +535,7 @@ IMPORTANT: Use exactly these section headers with ## prefix. Format lists as num
               }
             ],
             temperature: 0.7,
-            max_tokens: 2000  // Significantly reduced token limit for timeout recovery
+            max_tokens: 10000  // Significantly reduced token limit for timeout recovery
           }, {
             timeout: 25000,  // Shorter timeout for recovery attempt
             headers: {
@@ -756,8 +756,8 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         // Make single request with appropriate system prompt
         const comprehensiveInsight = await this.retryWithExponentialBackoff(
           async () => {
-            // Starting with 3000 tokens and will increase if response is truncated
-            let maxTokens = 3000;
+            // Starting with 10000 tokens and will increase if response is truncated
+            let maxTokens = 10000;
             let attempt = 0;
             const maxAttempts = 3;
             let response;
@@ -1084,7 +1084,7 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
           { role: "user", content: "Hello" }
         ],
         temperature: 0.7,
-        max_tokens: 5000
+        max_tokens: 10000
       });
       result.ai = response.status === 200 && response.data?.choices?.[0]?.message?.content;
       if (!result.ai) {

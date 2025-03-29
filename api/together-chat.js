@@ -216,7 +216,7 @@ export default async function handler(req, res) {
                 content: modifiedPrompt
               }
             ],
-            max_tokens: 2000 // Use a smaller token limit for more reliability
+            max_tokens: 10000 // Use a smaller token limit for more reliability
           };
           
           try {
@@ -282,7 +282,7 @@ export default async function handler(req, res) {
           const simplifiedRequest = {
             ...requestData,
             messages: simplifiedMessages,
-            max_tokens: Math.min(1000, requestData.max_tokens) // Use smaller token limit for retry
+            max_tokens:10000// Use smaller token limit for retry
           };
           
           // Log the retry attempt
