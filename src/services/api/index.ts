@@ -452,6 +452,12 @@ class ApiService {
       const isAstrologyRequest = prompt.includes('astrological reading') && 
         (prompt.includes('Planet Positions:') || prompt.match(/Sun:|Moon:|Ascendant:/));
       
+      // Check if this is a simple non-astrological request (e.g., health check)
+      const isSimpleQuery = prompt.length < 30 || 
+                         insightType.includes('health') || 
+                         prompt.includes('health') || 
+                         (systemPrompt && systemPrompt.includes('Do NOT provide astrological readings'));
+      
       // Clean coordinates from astrological prompts
       const cleanedPrompt = isAstrologyRequest ? this.cleanAstrologyPrompt(prompt) : prompt;
       
@@ -460,6 +466,14 @@ class ApiService {
         
         // For astrological readings, enhance the system prompt to ensure complete responses
         systemPrompt += " Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content.";
+      } else if (isSimpleQuery) {
+        // For simple queries, ensure we get a direct response not related to astrology
+        systemPrompt = "You are a helpful assistant. Provide direct, concise answers. Do NOT provide astrological information unless explicitly requested.";
+      }
+      
+      // Set appropriate token limits based on request type
+      if (isSimpleQuery) {
+        maxTokens = 100; // Very limited tokens for simple queries
       }
       
       while (attempt < maxAttempts) {
@@ -485,8 +499,9 @@ class ApiService {
             timeout: 55000,  // Increased timeout to allow for more complete responses
             headers: {
               'Content-Type': 'application/json',
-              'X-Request-Type': 'astrological-insight',
-              'X-Insight-Type': insightType
+              'X-Request-Type': isSimpleQuery ? 'simple-chat' : 'astrological-insight',
+              'X-Insight-Type': insightType,
+              'X-Simple-Query': isSimpleQuery ? 'true' : 'false'
             }
           });
           
@@ -679,7 +694,9 @@ Use section headers with ## and keep points concise but complete. Format lists w
             messages: [
               {
                 role: "system",
-                content: "You are an expert Vedic astrologer. Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content. Always use ## prefix for section headers."
+                content: isAstrologyRetry ? 
+                  "You are an expert Vedic astrologer. Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content. Always use ## prefix for section headers." :
+                  "You are a helpful assistant. Provide direct, concise answers. Do NOT provide astrological information unless explicitly requested."
               },
               {
                 role: "user",
@@ -687,13 +704,14 @@ Use section headers with ## and keep points concise but complete. Format lists w
               }
             ],
             temperature: 0.7,
-            max_tokens: 16000  // Maximum token limit to avoid truncation
+            max_tokens: isAstrologyRetry ? 16000 : 500  // Adjust token limit based on query type
           }, {
-            timeout: 55000,  // Increased timeout for more complete responses
+            timeout: isAstrologyRetry ? 55000 : 20000,  // Shorter timeout for simple queries
             headers: {
               'Content-Type': 'application/json',
-              'X-Request-Type': 'simplified-insight',
-              'X-Insight-Type': insightType
+              'X-Request-Type': isAstrologyRetry ? 'simplified-insight' : 'simple-chat',
+              'X-Insight-Type': insightType,
+              'X-Simple-Query': isAstrologyRetry ? 'false' : 'true'
             }
           });
           
@@ -1231,11 +1249,11 @@ Keep all points concise (10-15 words each) and use numbered format for lists (1.
       const response = await this.client.post('/api/together/chat', {
         model: "mistralai/Mixtral-8x7B-Instruct-v0.1", 
         messages: [
-          { role: "system", content: "You are a helpful assistant.  " },
-          { role: "user", content: "Hello" }
+          { role: "system", content: "You are a helpful assistant. You respond with short, direct answers - ideally just a few words. Do NOT provide astrological readings." },
+          { role: "user", content: "Please respond with just the word 'healthy' to confirm you're working properly." }
         ],
         temperature: 0.7,
-        max_tokens: 10000
+        max_tokens: 10
       });
       result.ai = response.status === 200 && response.data?.choices?.[0]?.message?.content;
       if (!result.ai) {

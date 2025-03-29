@@ -135,6 +135,46 @@ export default async function handler(req, res) {
       max_tokens: Math.min(req.body.max_tokens || 16000, 16000), // Increase to 16000 tokens to avoid truncation
     };
     
+    // Check if this is a simple health check or non-astrological query
+    const requestUserMsg = requestData.messages.find(msg => msg.role === 'user')?.content || '';
+    const requestSystemMsg = requestData.messages.find(msg => msg.role === 'system')?.content || '';
+    
+    const isSimpleChat = (
+      requestUserMsg.length < 50 || // Short messages
+      requestSystemMsg.includes('Do NOT provide astrological readings') || // Explicit directive
+      (req.headers && req.headers['x-request-type'] === 'simple-chat') || // Header flag
+      req.query.simple === 'true' // Query parameter
+    );
+    
+    if (isSimpleChat) {
+      console.log('Detected simple chat request, optimizing for non-astrological response');
+      
+      // Override the system message if it's not already explicit
+      if (!requestSystemMsg.includes('Do NOT provide astrological readings')) {
+        // If there's an existing system message, append to it
+        if (requestData.messages.find(msg => msg.role === 'system')) {
+          requestData.messages = requestData.messages.map(msg => {
+            if (msg.role === 'system') {
+              return {
+                ...msg,
+                content: `${msg.content} Provide direct, concise answers. Do NOT provide astrological information unless explicitly requested.`
+              };
+            }
+            return msg;
+          });
+        } else {
+          // If no system message exists, add one
+          requestData.messages.unshift({
+            role: 'system',
+            content: 'You are a helpful assistant. Provide direct, concise answers. Do NOT provide astrological information unless explicitly requested.'
+          });
+        }
+      }
+      
+      // Use lower token limit for simple requests
+      requestData.max_tokens = Math.min(requestData.max_tokens, 500); 
+    }
+    
     // Add specific instructions to avoid truncation in the system prompt
     if (requestData.messages && requestData.messages.length > 0 && requestData.messages[0].role === 'system') {
       // Check if this is an astrological reading request
@@ -142,15 +182,31 @@ export default async function handler(req, res) {
         msg.role === 'user' && 
         (msg.content.includes('astrological reading') || 
          msg.content.includes('birth chart') ||
-         msg.content.includes('Planet Positions:'))
+         msg.content.includes('Planet Positions:') ||
+         msg.content.includes('born on') && msg.content.includes('at') && msg.content.includes('in') ||
+         msg.content.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+/i))
       );
 
-      if (isAstrologyReading) {
-        // Enhance the system prompt to avoid truncation
+      // Also check for explicit non-astrological health check or system test queries
+      const isHealthCheck = requestData.messages.some(msg => 
+        (msg.role === 'user' && 
+         (msg.content.includes('healthy') || 
+          msg.content.length < 20)) || // Short messages likely aren't asking for astrology readings
+        (msg.role === 'system' && 
+         msg.content.includes('Do NOT provide astrological readings'))
+      );
+
+      if (isAstrologyReading && !isHealthCheck) {
+        // Only enhance astrological reading prompts, not health checks
+        console.log('Detected astrological reading request, enhancing system prompt');
         requestData.messages[0].content += " Provide complete responses covering all requested sections. Do not truncate your response. Be direct and concise while ensuring all sections are addressed properly. Each section should have substantive content.";
         
         // For astrological readings, ensure max_tokens is high enough
         requestData.max_tokens = 16000;
+      } else if (isHealthCheck) {
+        console.log('Detected health check or test request, keeping response brief');
+        // For health checks, ensure max_tokens is low to avoid long responses
+        requestData.max_tokens = Math.min(requestData.max_tokens, 100);
       }
     }
     
@@ -464,42 +520,56 @@ export default async function handler(req, res) {
         
         console.warn(`Possible truncated response detected: ${tokenCount} tokens, finish_reason: ${response.data.choices[0].finish_reason}`);
         
-        // For any truncated response, try a simpler retry with better instructions
-        console.log('Truncated response detected. Applying special handling for retry.');
-        
         // Extract user message
         const userMessage = requestData.messages.find(msg => msg.role === 'user')?.content || '';
         
-        // Create simplified prompt
-        let simplifiedPrompt = userMessage;
+        // Check if this is an astrological query or a simple test/health check
+        const isAstrologyQuery = userMessage.includes('astrological reading') || 
+                               userMessage.includes('birth chart') || 
+                               userMessage.includes('Planet Positions:') ||
+                               (userMessage.includes('born on') && userMessage.includes('at') && userMessage.includes('in')) ||
+                               userMessage.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+/i);
         
-        // If it's an astrological query, ensure key format is preserved
-        if (userMessage.includes('astrological reading') || userMessage.includes('birth chart') || userMessage.includes('Planet Positions:')) {
-          // Extract core birth data
-          const nameMatch = userMessage.match(/for\s+([^(,\n]+)/i);
-          const birthDetailsMatch = userMessage.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+        // Health checks or very short queries are not astrological
+        const isHealthCheck = userMessage.includes('healthy') || 
+                           userMessage.length < 20 ||
+                           requestData.messages.some(msg => msg.role === 'system' && msg.content.includes('Do NOT provide astrological readings'));
+        
+        // Only apply special handling for astrological queries that aren't health checks
+        if (isAstrologyQuery && !isHealthCheck) {
+          // For any truncated response, try a simpler retry with better instructions
+          console.log('Truncated astrological response detected. Applying special handling for retry.');
           
-          let name = nameMatch ? nameMatch[1].trim() : 'the person';
-          let date = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
-          let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
-          let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+          // Create simplified prompt
+          let simplifiedPrompt = userMessage;
           
-          // Extract planet positions if present
-          let planetPositions = '';
-          if (userMessage.includes('Planet Positions:')) {
-            const planetPositionsMatch = userMessage.match(/Planet Positions:([\s\S]*?)(?:Include|Section|##|$)/i);
-            if (planetPositionsMatch) {
-              planetPositions = planetPositionsMatch[1].trim();
+          // If it's an astrological query, ensure key format is preserved
+          if (userMessage.includes('astrological reading') || userMessage.includes('birth chart') || userMessage.includes('Planet Positions:')) {
+            // Extract core birth data
+            const nameMatch = userMessage.match(/for\s+([^(,\n]+)/i);
+            const birthDetailsMatch = userMessage.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
+            
+            let name = nameMatch ? nameMatch[1].trim() : 'the person';
+            let date = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
+            let time = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
+            let place = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
+            
+            // Extract planet positions if present
+            let planetPositions = '';
+            if (userMessage.includes('Planet Positions:')) {
+              const planetPositionsMatch = userMessage.match(/Planet Positions:([\s\S]*?)(?:Include|Section|##|$)/i);
+              if (planetPositionsMatch) {
+                planetPositions = planetPositionsMatch[1].trim();
+              }
             }
-          }
-          
-          // Construct clear, simplified prompt
-          simplifiedPrompt = `Generate a complete astrological reading for ${name} born on ${date} at ${time} in ${place}.`;
-          if (planetPositions) {
-            simplifiedPrompt += `\n\nPlanet Positions:\n${planetPositions}`;
-          }
-          
-          simplifiedPrompt += `\n\nInclude ALL of these sections, each with substantive content:
+            
+            // Construct clear, simplified prompt
+            simplifiedPrompt = `Generate a complete astrological reading for ${name} born on ${date} at ${time} in ${place}.`;
+            if (planetPositions) {
+              simplifiedPrompt += `\n\nPlanet Positions:\n${planetPositions}`;
+            }
+            
+            simplifiedPrompt += `\n\nInclude ALL of these sections, each with substantive content:
 1. Birth Details (name, date, time, place)
 2. Birth Chart Overview (clearly state Sun sign, Moon sign, and Ascendant/Lagna)
 3. Ascendant/Lagna analysis
@@ -511,54 +581,55 @@ export default async function handler(req, res) {
 9. Significant Chart Features (5 features)
 
 Use section headers with ## and keep points concise but complete. Format lists with numbered format (1., 2., 3.). Make sure to include ALL sections.`;
-        }
-        
-        // Create modified request with enhanced system instructions
-        const modifiedRequest = {
-          model: requestData.model,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an expert Vedic astrologer providing complete readings. IMPORTANT: You must respond with ALL requested sections in full without truncation. Use ## for section headers. Make every section substantive and don\'t skip any requested section.'
-            },
-            {
-              role: 'user',
-              content: simplifiedPrompt
-            }
-          ],
-          max_tokens: 16000, // Maximum possible tokens
-          temperature: 0.7
-        };
-        
-        try {
-          console.log('Retrying with simplified prompt and enhanced instructions');
+          }
           
-          // Make the modified request with exponential backoff
-          const retryResponse = await retryWithExponentialBackoff(
-            async () => {
-              return await axios({
-                method: 'POST',
-                url: 'https://api.together.xyz/v1/chat/completions',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${apiKey}`
-                },
-                data: modifiedRequest,
-                timeout: 55000 // Maximum timeout allowed
-              });
-            },
-            3, // Try up to 3 times
-            2000, // Start with 2 second delay
-            2 // Double the delay each time
-          );
+          // Create modified request with enhanced system instructions
+          const modifiedRequest = {
+            model: requestData.model,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an expert Vedic astrologer providing complete readings. IMPORTANT: You must respond with ALL requested sections in full without truncation. Use ## for section headers. Make every section substantive and don\'t skip any requested section.'
+              },
+              {
+                role: 'user',
+                content: simplifiedPrompt
+              }
+            ],
+            max_tokens: 16000, // Maximum possible tokens
+            temperature: 0.7
+          };
           
-          console.log('Modified retry request successful');
-          
-          // Return the retry response
-          return res.status(200).json(retryResponse.data);
-        } catch (specialRetryError) {
-          console.error('Special retry failed:', specialRetryError.message);
-          // Fall through to original response
+          try {
+            console.log('Retrying with simplified prompt and enhanced instructions');
+            
+            // Make the modified request with exponential backoff
+            const retryResponse = await retryWithExponentialBackoff(
+              async () => {
+                return await axios({
+                  method: 'POST',
+                  url: 'https://api.together.xyz/v1/chat/completions',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                  },
+                  data: modifiedRequest,
+                  timeout: 55000 // Maximum timeout allowed
+                });
+              },
+              3, // Try up to 3 times
+              2000, // Start with 2 second delay
+              2 // Double the delay each time
+            );
+            
+            console.log('Modified retry request successful');
+            
+            // Return the retry response
+            return res.status(200).json(retryResponse.data);
+          } catch (specialRetryError) {
+            console.error('Special retry failed:', specialRetryError.message);
+            // Fall through to original response
+          }
         }
       }
       
@@ -584,12 +655,19 @@ Use section headers with ## and keep points concise but complete. Format lists w
           // Determine if this is an astrological reading
           const isAstrologyRequest = userMsg.includes('astrological reading') || 
                                     userMsg.includes('birth chart') || 
-                                    userMsg.includes('Planet Positions:');
+                                    userMsg.includes('Planet Positions:') ||
+                                    (userMsg.includes('born on') && userMsg.includes('at') && userMsg.includes('in')) ||
+                                    userMsg.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+/i);
+          
+          // Health checks or very short queries are not astrological
+          const isHealthCheck = userMsg.includes('healthy') || 
+                             userMsg.length < 20 ||
+                             requestData.messages.some(msg => msg.role === 'system' && msg.content.includes('Do NOT provide astrological readings'));
           
           let simplifiedPrompt = userMsg;
           
           // For astrological readings, create a more structured prompt
-          if (isAstrologyRequest) {
+          if (isAstrologyRequest && !isHealthCheck) {
             // Extract key information
             const nameMatch = userMsg.match(/for\s+([^(,\n]+)/i);
             const birthDetailsMatch = userMsg.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
@@ -640,14 +718,16 @@ Use section headers with ## and keep points concise but complete. Format lists w
             messages: [
               {
                 role: 'system',
-                content: 'You are a concise expert providing complete responses. Cover all requested topics and sections without truncation. Use ## for section headers when appropriate. Be direct and to the point.'
+                content: isAstrologyRequest && !isHealthCheck ? 
+                  'You are a concise expert providing complete responses. Cover all requested topics and sections without truncation. Use ## for section headers when appropriate. Be direct and to the point.' :
+                  'You are a helpful assistant. Provide direct, concise answers without unnecessary elaboration. Do not assume queries are related to astrology unless explicitly stated.'
               },
               {
                 role: 'user',
                 content: simplifiedPrompt
               }
             ],
-            max_tokens: 16000, // Maximum possible tokens to avoid truncation
+            max_tokens: isAstrologyRequest && !isHealthCheck ? 16000 : 1000, // Fewer tokens for non-astrological queries
             temperature: 0.7
           };
           
