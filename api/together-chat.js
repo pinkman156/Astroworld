@@ -210,7 +210,11 @@ ${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
       const birthTime = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
       const birthPlace = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
       
-      const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} (born ${birthDate}, ${birthTime}, ${birthPlace}). ${chartInfo ? `\n\nBirth chart details:\n${chartInfo}` : ''}\n\nCover birth details, personality traits, career options (3), relationship patterns (3), key strengths (5), and challenges (5).`;
+      const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} (born ${birthDate}, ${birthTime}, ${birthPlace}). ${chartInfo ? `\n\nBirth chart details:\n${chartInfo}` : ''}
+
+When describing the birth chart, be sure to explicitly mention the Sun sign and Moon sign (e.g., "Sun in Gemini" and "Moon in Scorpio") in the Birth Chart Overview section.
+
+Cover birth details, personality traits, career options (3), relationship patterns (3), key strengths (5), and challenges (5).`;
       
       const systemPrompt = "You are an expert Vedic astrologer providing concise readings.";
       

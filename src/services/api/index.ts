@@ -665,7 +665,7 @@ Birth chart details: ${JSON.stringify(summarizedChartData)}
 Include the following sections in your response:
 
 Birth Details: Date, Time, Place, Name
-Birth Chart Overview: Brief overview of planetary positions and influences
+Birth Chart Overview: Brief overview of planetary positions and influences - be sure to explicitly mention the Sun sign and Moon sign (e.g., "The Sun is in Gemini and the Moon is in Scorpio")
 Ascendant/Lagna: Information about rising sign qualities and influence
 Personality Overview: Analysis of personality traits and character
 Career Insights: 3 specific insights about suitable career fields, strengths, and timing
@@ -778,7 +778,7 @@ Birth chart information: ${JSON.stringify(summarizedChartData)}
 
 Include these sections:
 Birth Details: Date, Time, Place, Name
-Birth Chart Overview: Brief chart overview (2-3 sentences)
+Birth Chart Overview: Brief chart overview (2-3 sentences) - be sure to explicitly mention the Sun sign and Moon sign (e.g., "The Sun is in Gemini and the Moon is in Scorpio")
 Personality Overview: Key personality traits (3-4 sentences)
 Career Insights: 3 concise career points
 Relationship Patterns: 3 concise relationship insights

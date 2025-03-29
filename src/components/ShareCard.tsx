@@ -135,12 +135,96 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
       return altMatch[1].trim();
     }
     
-    // Try to extract from other parts of the text
-    const anywhereRegex = new RegExp(`${signType}(?:\\s+sign)?\\s+is\\s+([\\w\\s]+)`, 'i');
+    // Try alternative format in the Birth Chart Overview section
+    const birthChartOverviewRegex = new RegExp(`${signType}(?:\\s+is)?\\s+in\\s+([\\w\\s]+)(?:\\(|,|\\.|\\s|$)`, 'i');
+    const birthChartMatch = insight.message.match(birthChartOverviewRegex);
+    if (birthChartMatch && birthChartMatch[1]) {
+      console.log(`Found ${signType} sign in Birth Chart Overview:`, birthChartMatch[1].trim());
+      return birthChartMatch[1].trim();
+    }
+    
+    // Try to find in phrases like "The Sun/Moon is in Gemini/Scorpio"
+    const phraseRegex = new RegExp(`The ${signType} is in ([\\w\\s]+)(?:\\(|,|\\.|\\s|$)`, 'i');
+    const phraseMatch = insight.message.match(phraseRegex);
+    if (phraseMatch && phraseMatch[1]) {
+      console.log(`Found ${signType} sign in phrase:`, phraseMatch[1].trim());
+      return phraseMatch[1].trim();
+    }
+    
+    // Try format like "while the Sun is in Gemini"
+    const whileRegex = new RegExp(`while the ${signType}(?:\\s+is)?\\s+in\\s+([\\w\\s]+)(?:\\(|,|\\.|\\s|$)`, 'i');
+    const whileMatch = insight.message.match(whileRegex);
+    if (whileMatch && whileMatch[1]) {
+      console.log(`Found ${signType} sign in 'while' phrase:`, whileMatch[1].trim());
+      return whileMatch[1].trim();
+    }
+    
+    // Try format like "Moon in Vrischika (Scorpio)"
+    const inParenRegex = new RegExp(`${signType} in ([\\w\\s]+?)(?:\\s*\\(|,|\\.|$)`, 'i');
+    const inParenMatch = insight.message.match(inParenRegex);
+    if (inParenMatch && inParenMatch[1]) {
+      console.log(`Found ${signType} sign with parentheses:`, inParenMatch[1].trim());
+      return inParenMatch[1].trim();
+    }
+    
+    // Try to extract from other parts of the text with "is in" format
+    const anywhereRegex = new RegExp(`${signType}(?:\\s+sign)?\\s+is\\s+in\\s+([\\w\\s]+)`, 'i');
     const anywhereMatch = insight.message.match(anywhereRegex);
     if (anywhereMatch && anywhereMatch[1]) {
       console.log(`Found ${signType} sign mentioned elsewhere:`, anywhereMatch[1].trim());
       return anywhereMatch[1].trim();
+    }
+    
+    // Try the Sanskrit to Western name mapping to extract the sign
+    if (signType === 'Sun' && insight.message.includes('Mithuna')) {
+      console.log('Found Sun sign as Mithuna (Gemini)');
+      return 'Gemini';
+    } else if (signType === 'Moon' && insight.message.includes('Vrischika')) {
+      console.log('Found Moon sign as Vrischika (Scorpio)');
+      return 'Scorpio';
+    }
+    
+    // Check for all Sanskrit names in the message
+    const sanskritNames = [
+      {sanskrit: 'Mesha', western: 'Aries'},
+      {sanskrit: 'Vrishabha', western: 'Taurus'},
+      {sanskrit: 'Mithuna', western: 'Gemini'},
+      {sanskrit: 'Karka', western: 'Cancer'},
+      {sanskrit: 'Simha', western: 'Leo'},
+      {sanskrit: 'Kanya', western: 'Virgo'},
+      {sanskrit: 'Tula', western: 'Libra'},
+      {sanskrit: 'Vrischika', western: 'Scorpio'},
+      {sanskrit: 'Dhanu', western: 'Sagittarius'},
+      {sanskrit: 'Makara', western: 'Capricorn'},
+      {sanskrit: 'Kumbha', western: 'Aquarius'},
+      {sanskrit: 'Meena', western: 'Pisces'}
+    ];
+    
+    for (const {sanskrit, western} of sanskritNames) {
+      // Check if there's a mention of the Sun/Moon with this Sanskrit name
+      const sanskritRegex = new RegExp(`${signType}\\s+(?:is\\s+in|in)\\s+${sanskrit}`, 'i');
+      if (insight.message.match(sanskritRegex)) {
+        console.log(`Found ${signType} sign as ${sanskrit} (${western})`);
+        return western;
+      }
+      
+      // Check for parentheses format: "Sanskrit (Western)"
+      const parenthesesRegex = new RegExp(`${signType}\\s+(?:is\\s+in|in)\\s+${sanskrit}\\s*\\(${western}\\)`, 'i');
+      if (insight.message.match(parenthesesRegex)) {
+        console.log(`Found ${signType} sign as ${sanskrit} (${western})`);
+        return western;
+      }
+    }
+    
+    // Try to extract directly from Birth Chart Overview section
+    const birthChartSection = insight.message.match(/Birth Chart Overview:([\s\S]*?)(?=\n\n|$)/i);
+    if (birthChartSection) {
+      // Look for "Sun in" or "Moon in" within this section
+      const sectionMatch = birthChartSection[1].match(new RegExp(`${signType}\\s+in\\s+([\\w\\s]+)(?:\\s|,|\\.|$)`, 'i'));
+      if (sectionMatch && sectionMatch[1]) {
+        console.log(`Found ${signType} sign in Birth Chart Overview section:`, sectionMatch[1].trim());
+        return sectionMatch[1].trim();
+      }
     }
     
     console.log(`Could not find ${signType} sign in message`);
@@ -166,8 +250,36 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
   
   // Extract personality overview
   const extractPersonality = (): string => {
-    const match = insight.message.match(/## Personality Overview\n([^\n#]+)/);
-    return match ? match[1].trim() : 'Cosmic insights await you';
+    // First try with ## format
+    const headeredMatch = insight.message.match(/## Personality Overview\n([^\n#]+)/);
+    if (headeredMatch) {
+      return headeredMatch[1].trim();
+    }
+    
+    // Try the new format without ## (Personality Overview: text)
+    const colonMatch = insight.message.match(/Personality Overview:([^.]+)\./i);
+    if (colonMatch) {
+      return colonMatch[1].trim();
+    }
+    
+    // Try to find a section that starts with "Personality Overview" anywhere
+    const sectionMatch = insight.message.match(/Personality Overview(?:[\s\n]*)([^.]+)\./i);
+    if (sectionMatch) {
+      return sectionMatch[1].trim();
+    }
+    
+    // Try to extract first line or paragraph from a personality overview section
+    const paragraphMatch = insight.message.match(/Personality Overview(?:[\s\n]*)([\s\S]*?)(?=\n\n|$)/i);
+    if (paragraphMatch) {
+      // Get the first line or sentence
+      const firstSentence = paragraphMatch[1].split(/\.|\n/)[0].trim();
+      if (firstSentence.length > 5) {
+        return firstSentence;
+      }
+    }
+    
+    // Fallback
+    return 'Cosmic insights await you';
   };
   
   const personalityText = extractPersonality();
@@ -240,28 +352,63 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
   
   // Get a random strength with improved extraction
   const extractStrength = (): string => {
-    const match = insight.message.match(/## Key Strengths\n([\s\S]*?)(?=##)/);
-    if (!match) return 'Your unique cosmic gifts';
+    // First try with ## format
+    const headeredMatch = insight.message.match(/## Key Strengths\n([\s\S]*?)(?=##|$)/);
     
-    // First try to parse bullet points with dash format
-    const strengthLines = match[1].trim().split('\n')
-      .map(line => line.trim())
-      .filter(line => line.startsWith('-') || line.startsWith('•') || line.startsWith('*') || line.startsWith('1') || line.startsWith('2') || line.startsWith('3') || line.startsWith('4'));
-    
-    if (strengthLines.length > 0) {
-      // Clean the bullet points and remove numbering
-      const cleanStrengths = strengthLines.map(line => 
-        line.replace(/^-\s*|\*\s*|•\s*|\d+\.\s*/g, '').trim()
-      );
-      return cleanStrengths[Math.floor(Math.random() * cleanStrengths.length)];
+    // If found with ## format, process it
+    if (headeredMatch) {
+      // First try to parse bullet points with dash format
+      const strengthLines = headeredMatch[1].trim().split('\n')
+        .map(line => line.trim())
+        .filter(line => line.startsWith('-') || line.startsWith('•') || line.startsWith('*') || /^\d+\./.test(line));
+      
+      if (strengthLines.length > 0) {
+        // Clean the bullet points and remove numbering
+        const cleanStrengths = strengthLines.map(line => 
+          line.replace(/^-\s*|\*\s*|•\s*|\d+\.\s*/g, '').trim()
+        );
+        return cleanStrengths[Math.floor(Math.random() * cleanStrengths.length)];
+      }
+      
+      // Fallback for other formats
+      const rawText = headeredMatch[1].trim();
+      const fallbackStrengths = rawText.split(/\n+/).filter(line => line.trim().length > 5);
+      if (fallbackStrengths.length > 0) {
+        return fallbackStrengths[Math.floor(Math.random() * fallbackStrengths.length)];
+      }
     }
     
-    // Fallback for other formats
-    const rawText = match[1].trim();
-    const fallbackStrengths = rawText.split(/\n+/).filter(line => line.trim().length > 5);
-    return fallbackStrengths.length > 0 
-      ? fallbackStrengths[Math.floor(Math.random() * fallbackStrengths.length)]
-      : 'Your unique cosmic gifts';
+    // Try the new format without ## (Key Strengths: text)
+    const colonMatch = insight.message.match(/Key Strengths:([\s\S]*?)(?=Potential|Challenges|Significant|$)/i);
+    if (colonMatch) {
+      const strengthText = colonMatch[1].trim();
+      
+      // Try to extract numbered items (1., 2., 3., etc.)
+      const numberedRegex = /\d+\.\s*([^.]+)(?:\.|$)/g;
+      const numberedMatches = Array.from(strengthText.matchAll(numberedRegex));
+      
+      if (numberedMatches.length > 0) {
+        const numberedStrengths = numberedMatches.map(match => match[1].trim());
+        return numberedStrengths[Math.floor(Math.random() * numberedStrengths.length)];
+      }
+      
+      // If no numbered items, split by newlines
+      const lines = strengthText.split(/\n+/).filter(line => line.trim().length > 5);
+      if (lines.length > 0) {
+        return lines[Math.floor(Math.random() * lines.length)];
+      }
+    }
+    
+    // Fallback to looking for strength-related statements
+    const strengthKeywords = ['strong', 'talent', 'ability', 'skill', 'gift', 'excellence', 'aptitude', 'prowess'];
+    for (const keyword of strengthKeywords) {
+      const keywordMatch = insight.message.match(new RegExp(`([^.]+${keyword}[^.]+)\.`, 'i'));
+      if (keywordMatch) {
+        return keywordMatch[1].trim();
+      }
+    }
+    
+    return 'Your unique cosmic gifts';
   };
   
   const randomStrength = extractStrength();
