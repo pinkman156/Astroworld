@@ -441,46 +441,22 @@ class ApiService {
         if (prompt.includes('astrological reading')) {
           simplifiedPrompt = `Generate a concise astrological reading with these exact section headers:
 
-## Birth Details
-Date: [Extract from original query if possible]
-Time: [Extract from original query if possible]
-Place: [Extract from original query if possible]
-
-## Birth Chart Overview
-[Very brief overview]
-
-## Ascendant/Lagna
-[Brief information about rising sign]
-
 ## Personality Overview
 [Brief personality traits]
 
 ## Career Insights
-1. [First career insight]
-2. [Second career insight]
-3. [Third career insight]
+[Brief career potential]
 
 ## Relationship Patterns
-1. [First relationship insight]
-2. [Second relationship insight]
-3. [Third relationship insight]
+[Brief relationship style]
 
 ## Key Strengths
-1. [First strength]
-2. [Second strength]
-3. [Third strength]
+[List 2-3 strengths]
 
 ## Potential Challenges
-1. [First challenge]
-2. [Second challenge]
-3. [Third challenge]
+[List 2-3 challenges]
 
-## Significant Chart Features
-1. [First feature]
-2. [Second feature]
-3. [Third feature]
-
-IMPORTANT: Use exactly these section headers with ## prefix. Format lists as numbered items (1., 2., 3.). Do not use bold formatting or asterisks.`;
+IMPORTANT: Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks.`;
         }
         
         try {
@@ -661,57 +637,28 @@ IMPORTANT: Use exactly these section headers with ## prefix. Format lists as num
 
 Please structure your response with the following EXACT section headers (use exactly these headers with ## prefix):
 
-## Birth Details
-Date: ${birthData.date}
-Time: ${birthData.time}
-Place: ${birthData.place}
-Name: ${birthData.name}
-
 ## Birth Chart Overview
-[Brief overview of the chart, including planetary positions and influences]
-
-## Ascendant/Lagna
-[Information about the rising sign, its qualities, and influence on personality]
+[Brief overview of the chart]
 
 ## Personality Overview
 [Detailed analysis of personality traits, temperament, and overall character]
 
 ## Career Insights
-1. [First career insight with specific career fields well-suited to this chart]
-2. [Second career insight with specific strengths in professional settings]
-3. [Third career insight about potential career path or timing of career success]
+[Career potential, professional strengths, suitable paths and industries]
 
 ## Relationship Patterns
-1. [First relationship insight about compatibility and approach to relationships]
-2. [Second relationship insight about emotional needs in partnerships]
-3. [Third relationship insight about communication style or challenges in relationships]
+[Relationship style, compatibility factors, and partnership dynamics]
 
 ## Key Strengths
-1. [First key strength]
-2. [Second key strength]
-3. [Third key strength]
-4. [Fourth key strength]
-5. [Fifth key strength]
+[List of 3-5 key strengths or positive qualities]
 
 ## Potential Challenges
-1. [First potential challenge]
-2. [Second potential challenge]
-3. [Third potential challenge]
-4. [Fourth potential challenge]
-5. [Fifth potential challenge]
+[List of 3-5 challenges or growth areas]
 
 ## Significant Chart Features
-1. [First significant chart feature - specific planetary position or aspect]
-2. [Second significant chart feature - important house placement]
-3. [Third significant chart feature - relevant yogas or doshas]
-4. [Fourth significant chart feature - unique aspect pattern]
-5. [Fifth significant chart feature - notable remedial measure if applicable]
+[Notable placements, aspects, or configurations in the birth chart]
 
-IMPORTANT FORMATTING INSTRUCTIONS:
-1. Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks - only use the ## prefix for headers.
-2. For Career Insights, Relationship Patterns, Key Strengths, Potential Challenges, and Significant Chart Features, format each point as a numbered list (1., 2., 3., etc.).
-3. Ensure each section has the exact number of points specified (5 for strengths/challenges/features, 3 for career/relationships).
-4. Do not combine multiple points into a single paragraph - each point should be distinct and separately numbered.
+IMPORTANT: Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks - only use the ## prefix for headers.
 
 Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
 
@@ -723,7 +670,7 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
               messages: [
                 {
                   role: "system",
-                  content: "You are an expert Vedic astrologer providing comprehensive birth chart readings. Always include all the sections requested by the user with exactly the section headings specified. Be concise but insightful in each section. Always use the ## prefix for headings and never use bold formatting or asterisks for headers. Format lists as numbered items (1., 2., 3.) exactly as requested in the prompt."
+                  content: "You are an expert Vedic astrologer providing comprehensive birth chart readings. Always include all the sections requested by the user with exactly the section headings specified. Be concise but insightful in each section. Always use the ## prefix for headings and never use bold formatting or asterisks for headers."
                 },
                 {
                   role: "user",
@@ -746,7 +693,7 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         // Replace any bold headers with ## headers if needed
         const processedInsight = fullInsight
           .replace(/\*\*([^*]+)\*\*/g, '## $1')  // Replace **Header** with ## Header
-          .replace(/^(Birth Details|Birth Chart Overview|Ascendant\/Lagna|Personality Overview|Career Insights|Relationship Patterns|Key Strengths|Potential Challenges|Significant Chart Features)$/gm, '## $1'); // Add ## to any headers without them
+          .replace(/^(Birth Chart Overview|Personality Overview|Career Insights|Relationship Patterns|Key Strengths|Potential Challenges|Significant Chart Features)$/gm, '## $1'); // Add ## to any headers without them
         
         // Create the response
         const response: ApiResponse = {
@@ -767,65 +714,37 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
         // Provide a simplified fallback with just the essential sections
         try {
           console.log('Attempting simplified fallback request');
-          const fallbackPrompt = `Generate a brief astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}.
+          const fallbackPrompt = `Generate a brief astrological reading for ${birthData.name} born on ${birthData.date} at ${birthData.time} in ${birthData.place}. 
 
 Include exactly these headers with ## prefix:
-
-## Birth Details
-Date: ${birthData.date}
-Time: ${birthData.time}
-Place: ${birthData.place}
-Name: ${birthData.name}
-
-## Birth Chart Overview
-[Brief overview of the chart]
-
-## Ascendant/Lagna
-[Information about the rising sign]
 
 ## Personality Overview
 [Brief personality analysis]
 
 ## Career Insights
-1. [First career insight]
-2. [Second career insight]
-3. [Third career insight]
+[Brief career guidance]
 
 ## Relationship Patterns
-1. [First relationship insight]
-2. [Second relationship insight]
-3. [Third relationship insight]
+[Brief relationship patterns]
 
 ## Key Strengths
-1. [First key strength]
-2. [Second key strength]
-3. [Third key strength]
+[List 3 key strengths]
 
 ## Potential Challenges
-1. [First challenge]
-2. [Second challenge]
-3. [Third challenge]
+[List 3 potential challenges]
 
-## Significant Chart Features
-1. [First significant feature]
-2. [Second significant feature]
-3. [Third significant feature]
-
-IMPORTANT: 
-1. Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks.
-2. Format all lists as numbered items (1., 2., 3.) as shown above.
-3. Each point should be distinct and separately numbered.
+IMPORTANT: Use exactly these section headers with ## prefix. Do not use bold formatting or asterisks - only use the ## prefix for headers.
 
 Keep it simple and focused. Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
-
+          
           const fallbackInsight = await this.getAIInsight(fallbackPrompt, 
-            "You are an expert Vedic astrologer providing concise birth chart readings. Always include all the sections requested with exactly the section headings specified. Always use the ## prefix for headings and never use bold formatting or asterisks for headers. Format lists as numbered items (1., 2., 3.) exactly as requested.", 
+            "You are an expert Vedic astrologer providing concise birth chart readings. Always include all the sections requested with exactly the section headings specified. Always use the ## prefix for headings and never use bold formatting or asterisks for headers.", 
             "comprehensive_fallback");
           
           // Process the fallback insight to ensure proper formatting
           const processedFallbackInsight = fallbackInsight
             .replace(/\*\*([^*]+)\*\*/g, '## $1')  // Replace **Header** with ## Header
-            .replace(/^(Birth Details|Birth Chart Overview|Ascendant\/Lagna|Personality Overview|Career Insights|Relationship Patterns|Key Strengths|Potential Challenges|Significant Chart Features)$/gm, '## $1'); // Add ## to any headers without them
+            .replace(/^(Personality Overview|Career Insights|Relationship Patterns|Key Strengths|Potential Challenges)$/gm, '## $1'); // Add ## to any headers without them
           
           // Create the response
           const response: ApiResponse = {
@@ -988,7 +907,7 @@ Keep it simple and focused. Here is the birth chart data: ${JSON.stringify(summa
       const response = await this.client.post('/api/together/chat', {
         model: "mistralai/Mixtral-8x7B-Instruct-v0.1", 
         messages: [
-          { role: "system", content: "You are a helpful assistant.  in any career that values communication, analytical skills, and empathy. It is also important for this individual to find a career that allows them to explore their natural curiosity and desire to understand complex human behavior.\n\nAdditionally, the position of the Sun in Mithuna (Gemini) suggests a natural adaptability, versatility, and curiosity, which can be valuable traits in many different fields. The dual nature of Gemini may also indicate a need for diversity and variety in their work, so a career that offers opportunities for exploration and learning may be especially fulfilling.\n\nOverall, with the right combination of education, training, and personal development, this individual has the potential to excel in a wide range of careers that allow them to use their natural abilities to communicate, analyze, and connect with other" },
+          { role: "system", content: "You are a helpful assistant." },
           { role: "user", content: "Hello" }
         ],
         temperature: 0.7,
