@@ -156,60 +156,62 @@ export default async function handler(req, res) {
       const birthDetailsMatch = userMessage.match(/born\s+(?:on\s+)?([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i) || 
                                userMessage.match(/(?:Date|DOB|Birth)[\s:]+([^,\n]+)(?:,|\s+|Time[\s:]+)([^,\n]+)(?:,|\s+|Place[\s:]+)([^.\n]+)/i);
       
-      // Extract chart details if available
-      const chartDataStr = userMessage.includes('birth chart data') ? 
-                          userMessage.match(/birth chart data:?\s*(\{.*\})/s)?.[1] : null;
-      
-      // Parse JSON if available and extract key details
-      let chartInfo = '';
-      if (chartDataStr) {
-        try {
-          const chartData = JSON.parse(chartDataStr);
-          const nakshatra = chartData?.kundli?.data?.nakshatra_details?.nakshatra?.name || '';
-          const moonSign = chartData?.kundli?.data?.nakshatra_details?.chandra_rasi?.name || '';
-          const sunSign = chartData?.kundli?.data?.nakshatra_details?.soorya_rasi?.name || '';
-          const additionalInfo = chartData?.kundli?.data?.nakshatra_details?.additional_info || {};
-          const yogas = chartData?.kundli?.data?.yoga_details || [];
-          const mangalDosha = chartData?.kundli?.data?.mangal_dosha?.has_dosha === false ? 'No Mangal Dosha' : 'Has Mangal Dosha';
-          
-          chartInfo = `
-Nakshatra: ${nakshatra}
-Moon Sign: ${moonSign}
-Sun Sign: ${sunSign}
-Deity: ${additionalInfo.deity || ''}
-Birth Stone: ${additionalInfo.birth_stone || ''}
-Best Direction: ${additionalInfo.best_direction || ''}
-Yogas: ${yogas.map(y => y.name + ' - ' + y.description).join(', ').substring(0, 100)}
-${mangalDosha}`.trim();
-        } catch (e) {
-          console.error('Error parsing chart data JSON:', e.message);
-        }
-      } else {
-        // Try to extract chart info from text
-        const nakshatraMatch = userMessage.match(/Nakshatra[:\s-]+([^,.\n]+)/i);
-        const moonSignMatch = userMessage.match(/Moon(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
-        const sunSignMatch = userMessage.match(/Sun(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
-        const ascendantMatch = userMessage.match(/(?:Ascendant|Lagna)[:\s-]+([^,.\n]+)/i);
-        const yogasMatch = userMessage.match(/(?:yoga|yogas)[:\s-]+([^,.\n]+)/i);
-        const mangalMatch = userMessage.match(/Mangal[:\s-]+([^,.\n]+)/i);
-        
-        if (nakshatraMatch || moonSignMatch || sunSignMatch || ascendantMatch) {
-          chartInfo = `
-${nakshatraMatch ? `Nakshatra: ${nakshatraMatch[1].trim()}` : ''}
-${moonSignMatch ? `Moon Sign: ${moonSignMatch[1].trim()}` : ''}
-${sunSignMatch ? `Sun Sign: ${sunSignMatch[1].trim()}` : ''}
-${ascendantMatch ? `Ascendant: ${ascendantMatch[1].trim()}` : ''}
-${yogasMatch ? `Yogas: ${yogasMatch[1].trim()}` : ''}
-${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
-        }
-      }
-      
-      // Prepare a clean, optimized prompt for the astrological reading
+      // Prepare variables for birth details
       const name = nameMatch ? nameMatch[1].trim() : 'the person';
       const birthDate = birthDetailsMatch ? birthDetailsMatch[1].trim() : '';
       const birthTime = birthDetailsMatch ? birthDetailsMatch[2].trim() : '';
       const birthPlace = birthDetailsMatch ? birthDetailsMatch[3].trim() : '';
       
+      // Initialize chart info
+      let chartInfo = '';
+      
+      // Check if we need to fetch planet position data
+      if (birthDate && birthTime) {
+        try {
+          // Format date and time for API request
+          // Convert to proper format: YYYY-MM-DD+HH:MM:SS
+          const formattedDateTime = formatDateTimeForAPI(birthDate, birthTime);
+          
+          // Default coordinates if specific location can't be geocoded
+          // These are approximate coordinates that can be used as fallback
+          const defaultCoordinates = "26.4973401,77.9973401";
+          
+          // In a production app, you would geocode the birthPlace to get coordinates
+          // For simplicity, we're using default coordinates here
+          const coordinates = defaultCoordinates;
+          
+          // Make request to planet position API
+          console.log('Fetching planet position data for chart details');
+          const planetPositionResponse = await axios({
+            method: 'GET',
+            url: `https://astroworld-delta.vercel.app/api/prokerala-proxy/planet-position?datetime=${formattedDateTime}&coordinates=${coordinates}&ayanamsa=1`,
+            timeout: 5000 // 5 second timeout for this request
+          });
+          
+          // Check if we got a valid response
+          if (planetPositionResponse.data && planetPositionResponse.data.planets) {
+            // Extract planet positions from the response
+            const planets = planetPositionResponse.data.planets;
+            
+            // Format the planet positions for the chartInfo
+            chartInfo = formatPlanetPositions(planets);
+            console.log('Successfully retrieved and formatted planet position data');
+          } else {
+            console.warn('Planet position API returned invalid data structure');
+            // Fall back to alternative method for chart details
+            chartInfo = extractChartInfoFromText(userMessage);
+          }
+        } catch (error) {
+          console.error('Error fetching planet position data:', error.message);
+          // Fall back to alternative method for chart details
+          chartInfo = extractChartInfoFromText(userMessage);
+        }
+      } else {
+        // If we don't have birth date/time, fall back to original methods
+        chartInfo = extractChartInfoFromText(userMessage);
+      }
+      
+      // Prepare a clean, optimized prompt for the astrological reading
       const optimizedPrompt = `Generate a comprehensive astrological reading for ${name} (born ${birthDate}, ${birthTime} IST, ${birthPlace}). ${chartInfo ? `\n\nBirth chart details:\n${chartInfo}` : ''}
 
 When describing the birth chart, be sure to explicitly mention the Sun sign, Moon sign, and Ascendant/Lagna (e.g., "Sun in Gemini", "Moon in Scorpio", and "Ascendant/Lagna in Virgo") in the Birth Chart Overview section. Always clearly indicate the Rising sign or Ascendant.
@@ -540,4 +542,171 @@ Keep each section under 75 words. Make sure to clearly mention the Ascendant/Ris
       details: error.message
     });
   }
+}
+
+// Helper function to format date and time for API request
+function formatDateTimeForAPI(birthDate, birthTime) {
+  try {
+    // Try to parse various date formats and standardize to YYYY-MM-DD
+    let formattedDate = birthDate;
+    
+    // Check if birthDate is in format like "June 15, 2000" or "15 June 2000"
+    if (birthDate.match(/[a-zA-Z]/)) {
+      const dateObj = new Date(birthDate);
+      if (!isNaN(dateObj.getTime())) {
+        formattedDate = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+      }
+    }
+    
+    // If date is in DD-MM-YYYY or DD/MM/YYYY format
+    if (birthDate.match(/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/)) {
+      const parts = birthDate.split(/[-\/]/);
+      formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    
+    // Format time (assuming format like "10:15 AM" or "10:15")
+    let formattedTime = birthTime;
+    
+    // Convert 12-hour format to 24-hour if needed
+    if (birthTime.match(/am|pm/i)) {
+      const timeObj = new Date(`2000-01-01 ${birthTime}`);
+      if (!isNaN(timeObj.getTime())) {
+        formattedTime = timeObj.toTimeString().split(' ')[0]; // HH:MM:SS
+      }
+    }
+    
+    // Ensure time has seconds
+    if (!formattedTime.match(/:/g) || formattedTime.match(/:/g).length < 2) {
+      formattedTime = formattedTime.includes(':') ? `${formattedTime}:00` : `${formattedTime}:00:00`;
+    }
+    
+    // Combine date and time in required format
+    return `${formattedDate}+${formattedTime}`;
+  } catch (error) {
+    console.error('Error formatting date/time:', error);
+    // Return a fallback format if parsing fails
+    return `${birthDate}+${birthTime}`;
+  }
+}
+
+// Function to format planet positions data from API response
+function formatPlanetPositions(planets) {
+  try {
+    if (!planets || !Array.isArray(planets)) {
+      return '';
+    }
+    
+    // Start building the formatted text
+    let formattedText = '';
+    
+    // Important planets to highlight first (in order of importance for astrology)
+    const keyPlanets = ['Sun', 'Moon', 'Ascendant', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
+    
+    // Track what signs have planets to determine rising sign/ascendant
+    const planetSigns = {};
+    let ascendantSign = '';
+    
+    // First pass to find Ascendant/Lagna
+    planets.forEach(planet => {
+      if (planet.name === 'Ascendant' || planet.name === 'Lagna') {
+        ascendantSign = planet.zodiac || planet.sign || '';
+      }
+      planetSigns[planet.name] = planet.zodiac || planet.sign || '';
+    });
+    
+    // Add rising sign/ascendant first if found
+    if (ascendantSign) {
+      formattedText += `Rising Sign/Ascendant: ${ascendantSign}\n`;
+    }
+    
+    // Add key planets in specific order
+    keyPlanets.forEach(planetName => {
+      const planet = planets.find(p => p.name === planetName);
+      if (planet) {
+        const sign = planet.zodiac || planet.sign || '';
+        const degree = planet.longitude || planet.degree || '';
+        const retrograde = planet.is_retrograde ? ' (Retrograde)' : '';
+        
+        // Only add if we have sign information
+        if (sign) {
+          formattedText += `${planetName}: ${sign}${degree ? ` at ${degree}°` : ''}${retrograde}\n`;
+        }
+      }
+    });
+    
+    // Add nakshatra information if available
+    planets.forEach(planet => {
+      if ((planet.name === 'Moon' || planet.name === 'Sun') && planet.nakshatra) {
+        formattedText += `${planet.name} Nakshatra: ${planet.nakshatra}\n`;
+      }
+    });
+    
+    // Add any special combinations or yogas if available in the API response
+    if (planets.yogas && planets.yogas.length > 0) {
+      formattedText += `\nKey Yogas: ${planets.yogas.join(', ')}\n`;
+    }
+    
+    // Add Mangal Dosha if available
+    if (planets.mangal_dosha !== undefined) {
+      formattedText += `Mangal Dosha: ${planets.mangal_dosha ? 'Yes' : 'No'}\n`;
+    }
+    
+    return formattedText.trim();
+  } catch (error) {
+    console.error('Error formatting planet positions:', error);
+    return ''; // Return empty string on error
+  }
+}
+
+// Function to extract chart info from text (fallback to original method)
+function extractChartInfoFromText(userMessage) {
+  // Extract chart details if available in JSON format
+  const chartDataStr = userMessage.includes('birth chart data') ? 
+                      userMessage.match(/birth chart data:?\s*(\{.*\})/s)?.[1] : null;
+  
+  // Parse JSON if available and extract key details
+  let chartInfo = '';
+  if (chartDataStr) {
+    try {
+      const chartData = JSON.parse(chartDataStr);
+      const nakshatra = chartData?.kundli?.data?.nakshatra_details?.nakshatra?.name || '';
+      const moonSign = chartData?.kundli?.data?.nakshatra_details?.chandra_rasi?.name || '';
+      const sunSign = chartData?.kundli?.data?.nakshatra_details?.soorya_rasi?.name || '';
+      const additionalInfo = chartData?.kundli?.data?.nakshatra_details?.additional_info || {};
+      const yogas = chartData?.kundli?.data?.yoga_details || [];
+      const mangalDosha = chartData?.kundli?.data?.mangal_dosha?.has_dosha === false ? 'No Mangal Dosha' : 'Has Mangal Dosha';
+      
+      chartInfo = `
+Nakshatra: ${nakshatra}
+Moon Sign: ${moonSign}
+Sun Sign: ${sunSign}
+Deity: ${additionalInfo.deity || ''}
+Birth Stone: ${additionalInfo.birth_stone || ''}
+Best Direction: ${additionalInfo.best_direction || ''}
+Yogas: ${yogas.map(y => y.name + ' - ' + y.description).join(', ').substring(0, 100)}
+${mangalDosha}`.trim();
+    } catch (e) {
+      console.error('Error parsing chart data JSON:', e.message);
+    }
+  } else {
+    // Try to extract chart info from text
+    const nakshatraMatch = userMessage.match(/Nakshatra[:\s-]+([^,.\n]+)/i);
+    const moonSignMatch = userMessage.match(/Moon(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
+    const sunSignMatch = userMessage.match(/Sun(?:\s+Sign)?[:\s-]+([^,.\n]+)/i);
+    const ascendantMatch = userMessage.match(/(?:Ascendant|Lagna)[:\s-]+([^,.\n]+)/i);
+    const yogasMatch = userMessage.match(/(?:yoga|yogas)[:\s-]+([^,.\n]+)/i);
+    const mangalMatch = userMessage.match(/Mangal[:\s-]+([^,.\n]+)/i);
+    
+    if (nakshatraMatch || moonSignMatch || sunSignMatch || ascendantMatch) {
+      chartInfo = `
+${nakshatraMatch ? `Nakshatra: ${nakshatraMatch[1].trim()}` : ''}
+${moonSignMatch ? `Moon Sign: ${moonSignMatch[1].trim()}` : ''}
+${sunSignMatch ? `Sun Sign: ${sunSignMatch[1].trim()}` : ''}
+${ascendantMatch ? `Ascendant: ${ascendantMatch[1].trim()}` : ''}
+${yogasMatch ? `Yogas: ${yogasMatch[1].trim()}` : ''}
+${mangalMatch ? `Mangal Dosha: ${mangalMatch[1].trim()}` : ''}`.trim();
+    }
+  }
+  
+  return chartInfo;
 } 
