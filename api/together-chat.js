@@ -136,16 +136,44 @@ export default async function handler(req, res) {
     };
     
     // Pre-process any request containing planet positions with coordinates
+    console.log('Checking for planet positions in the request...');
+    const userMsg = requestData.messages.find(msg => msg.role === 'user')?.content || '';
+
+    // More flexible patterns to match various formats of planet positions with coordinates
+    const degreePattern = /(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+[\s:]*at[\s:]*\d+\.\d+°/i;
+    const longitudePattern = /(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+[\s:]*(?:longitude|degree|at)[\s:]*\d+/i;
+
+    // Check first 500 chars of message for debugging
+    console.log('Message excerpt:', userMsg.substring(0, 500));
+
+    // Test patterns on the message content
+    const degreeMatch = userMsg.match(degreePattern);
+    const longitudeMatch = userMsg.match(longitudePattern);
+
+    // Log matches for debugging
+    if (degreeMatch) console.log('Degree pattern match:', degreeMatch[0]);
+    if (longitudeMatch) console.log('Longitude pattern match:', longitudeMatch[0]);
+
     const hasPlanetPositions = requestData.messages.some(msg => 
       msg.role === 'user' && 
       (
-        (msg.content.includes('Planet Positions:') && msg.content.includes('Sun:')) ||
-        msg.content.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn)[\s:]+[A-Za-z]+\s+at\s+\d+\.\d+°/i)
+        // Check for common indicators
+        (msg.content.includes('Planet Positions:') && 
+         (msg.content.includes('Sun:') || msg.content.includes('Moon:') || msg.content.includes('Ascendant:'))) ||
+        
+        // Check for coordinates in various formats
+        msg.content.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+[\s:]*at[\s:]*\d+\.\d+[°\s]/i) ||
+        
+        // Check for longitude mentions
+        msg.content.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+[\s:]*(?:longitude|degree)[:\s]*\d+/i) ||
+        
+        // Additional pattern for degrees without "at" keyword
+        msg.content.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+[\s:]*\d+\.\d+[°\s]/i)
       )
     );
-    
+
     if (hasPlanetPositions) {
-      console.log('Detected pre-formatted planet positions with coordinates. Cleaning request format...');
+      console.log('✅ Detected pre-formatted planet positions with coordinates. Cleaning request format...');
       
       // Clean up each message
       requestData.messages = requestData.messages.map(msg => {
@@ -164,13 +192,33 @@ export default async function handler(req, res) {
             line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
           );
           
-          // Format planet positions without coordinates
-          const cleanedPlanets = planetLines.map(line => {
-            const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:\s+at\s+\d+\.\d+°)?(\s+\(Retrograde\))?/i);
+          // Log found planet lines for debugging
+          console.log(`Found ${planetLines.length} planet lines to process`);
+          if (planetLines.length > 0) {
+            console.log('First planet line sample:', planetLines[0]);
+          }
+          
+          // Format planet positions without coordinates - using improved patterns
+          let cleanedPlanets = '';
+          cleanedPlanets = planetLines.map(line => {
+            // Improved regex to handle multiple formats
+            const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:[\s:]*(?:at|longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*)?(\s+\(Retrograde\))?/i);
+            
             if (match) {
-              return `${match[1]}: ${match[2]}${match[3] || ''}`;
+              const planetName = match[1].trim();
+              const signName = match[2].trim();
+              const retrograde = match[3] ? ' (Retrograde)' : '';
+              
+              return `${planetName}: ${signName}${retrograde}`;
             }
-            return line.replace(/\s+at\s+\d+\.\d+°/g, ''); // Fallback cleanup if regex match fails
+            
+            // If the regex didn't match, try a more aggressive cleanup
+            return line
+              .replace(/\s+at\s+\d+\.\d+[°\s]*/g, '') // Remove "at" format coordinates
+              .replace(/[\s:]*(?:longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*/g, '') // Remove longitude/degree mentions
+              .replace(/\s+\d+\.\d+[°\s]*/g, '') // Remove any remaining decimal numbers with degree symbols
+              .replace(/:\s+/, ': ') // Standardize spacing after colon
+              .trim();
           }).join('   ');
           
           // Get section headers from the original content
@@ -325,6 +373,29 @@ export default async function handler(req, res) {
     
     // Log request (without sensitive data)
     console.log(`API request: ${requestData.model}, ${requestData.messages.length} messages`);
+
+    // Log request with additional details to debug formatting issues
+    console.log(`API request: ${requestData.model}, ${requestData.messages.length} messages`);
+    console.log(`Max tokens: ${requestData.max_tokens}, Temperature: ${requestData.temperature}`);
+
+    // Log actual content format (first 500 chars) of user messages for debugging
+    requestData.messages.forEach((msg, idx) => {
+      if (msg.role === 'user') {
+        const excerpt = msg.content.substring(0, 500) + (msg.content.length > 500 ? '...' : '');
+        console.log(`Message ${idx} (${msg.role}) first 500 chars: ${excerpt}`);
+        
+        // Check for common format issues
+        const hasCoordinates = msg.content.match(/\d+\.\d+°/g);
+        if (hasCoordinates) {
+          console.log(`⚠️ Found ${hasCoordinates.length} coordinates with degree symbols that should be cleaned`);
+        }
+        
+        const hasPlanetSigns = msg.content.match(/(?:Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu|Ascendant)[\s:]+[A-Za-z]+/ig);
+        if (hasPlanetSigns) {
+          console.log(`Found ${hasPlanetSigns.length} planet-sign pairs, first few: ${hasPlanetSigns.slice(0, 3).join(', ')}`);
+        }
+      }
+    });
     
     try {
       // Make request to Together AI with exponential backoff
@@ -384,13 +455,28 @@ export default async function handler(req, res) {
               line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
             );
             
-            // Format planet positions without coordinates
+            console.log(`Found ${planetLines.length} planet lines in complex astrology retry`);
+            
+            // Format planet positions without coordinates - using improved patterns
             cleanedPlanets = planetLines.map(line => {
-              const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:\s+at\s+\d+\.\d+°)?(\s+\(Retrograde\))?/i);
+              // Improved regex to handle multiple formats
+              const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:[\s:]*(?:at|longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*)?(\s+\(Retrograde\))?/i);
+              
               if (match) {
-                return `${match[1]}: ${match[2]}${match[3] || ''}`;
+                const planetName = match[1].trim();
+                const signName = match[2].trim();
+                const retrograde = match[3] ? ' (Retrograde)' : '';
+                
+                return `${planetName}: ${signName}${retrograde}`;
               }
-              return line.replace(/\s+at\s+\d+\.\d+°/g, ''); // Fallback cleanup if regex match fails
+              
+              // If the regex didn't match, try a more aggressive cleanup
+              return line
+                .replace(/\s+at\s+\d+\.\d+[°\s]*/g, '') // Remove "at" format coordinates
+                .replace(/[\s:]*(?:longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*/g, '') // Remove longitude/degree mentions
+                .replace(/\s+\d+\.\d+[°\s]*/g, '') // Remove any remaining decimal numbers with degree symbols
+                .replace(/:\s+/, ': ') // Standardize spacing after colon
+                .trim();
             }).join('   ');
           }
           
@@ -483,13 +569,28 @@ export default async function handler(req, res) {
               line.match(/^\s*(Rising Sign|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)/)
             );
             
-            // Format planet positions without coordinates
+            console.log(`Found ${planetLines.length} planet lines in career query retry`);
+            
+            // Format planet positions without coordinates - using improved patterns
             cleanedPlanets = planetLines.map(line => {
-              const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:\s+at\s+\d+\.\d+°)?(\s+\(Retrograde\))?/i);
+              // Improved regex to handle multiple formats
+              const match = line.match(/^\s*(Rising Sign\/Ascendant|Ascendant|Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Rahu|Ketu)[\s:]+([A-Za-z]+)(?:[\s:]*(?:at|longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*)?(\s+\(Retrograde\))?/i);
+              
               if (match) {
-                return `${match[1]}: ${match[2]}${match[3] || ''}`;
+                const planetName = match[1].trim();
+                const signName = match[2].trim();
+                const retrograde = match[3] ? ' (Retrograde)' : '';
+                
+                return `${planetName}: ${signName}${retrograde}`;
               }
-              return line.replace(/\s+at\s+\d+\.\d+°/g, ''); // Fallback cleanup if regex match fails
+              
+              // If the regex didn't match, try a more aggressive cleanup
+              return line
+                .replace(/\s+at\s+\d+\.\d+[°\s]*/g, '') // Remove "at" format coordinates
+                .replace(/[\s:]*(?:longitude|degree)[\s:]*\d+(?:\.\d+)?[°\s]*/g, '') // Remove longitude/degree mentions
+                .replace(/\s+\d+\.\d+[°\s]*/g, '') // Remove any remaining decimal numbers with degree symbols
+                .replace(/:\s+/, ': ') // Standardize spacing after colon
+                .trim();
             }).join('   ');
           }
           
