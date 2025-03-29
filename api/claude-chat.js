@@ -127,6 +127,45 @@ export default async function handler(req, res) {
       });
     }
     
+    // Verify API key format (basic validation)
+    if (!apiKey.startsWith('sk-ant-')) {
+      console.error('Claude API key has invalid format');
+      return res.status(500).json({
+        error: 'Configuration error',
+        message: 'API key is invalid. Claude API keys should start with "sk-ant-"'
+      });
+    }
+    
+    // Fallback to Together API if requested
+    if (req.headers['x-use-together-fallback'] === 'true') {
+      // For backward compatibility, provide a mock response if Claude API is not available
+      console.log('Using mock response due to fallback request');
+      
+      const mockResponse = {
+        id: `mock-${Date.now()}`,
+        object: 'chat.completion',
+        created: Math.floor(new Date().getTime() / 1000),
+        model: "mock-model",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: "I apologize, but I'm unable to process this astrological request at the moment. The service is temporarily using a fallback mode with limited capabilities. Please try again later when full functionality is restored."
+            },
+            finish_reason: "stop"
+          }
+        ],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 50,
+          total_tokens: 150
+        }
+      };
+      
+      return res.status(200).json(mockResponse);
+    }
+    
     // Map the model (this is for compatibility with the existing API)
     // We'll use Claude 3.5 Sonnet by default
     const claudeModel = "claude-3-5-sonnet-20241022";
@@ -150,6 +189,13 @@ export default async function handler(req, res) {
       // Make request to Claude API with exponential backoff
       const response = await retryWithExponentialBackoff(
         async () => {
+          // Log headers for debugging (without the API key value)
+          console.log('Request headers:', {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey ? `${apiKey.substring(0, 8)}...` : 'not set',
+            'anthropic-version': '2023-06-01'
+          });
+          
           return await axios({
             method: 'POST',
             url: 'https://api.anthropic.com/v1/messages',
@@ -210,6 +256,43 @@ export default async function handler(req, res) {
         console.error('Claude API error details:', JSON.stringify(error.response.data, null, 2));
       } else if (error.request) {
         errorMessage = 'No response received from Claude API. The request timed out or failed to reach the server.';
+      }
+      
+      // Check if we should attempt a fallback to the original Together API
+      const togetherApiKey = process.env.TOGETHER_API_KEY || process.env.VITE_TOGETHER_API_KEY;
+      
+      if (togetherApiKey && !req.headers['x-no-fallback']) {
+        console.log('Attempting fallback to Together AI API due to Claude API failure');
+        
+        try {
+          // Prepare the Together API request using the original request data
+          const togetherRequestData = {
+            model: req.body.model || "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            messages: req.body.messages,
+            temperature: req.body.temperature || 0.7,
+            max_tokens: Math.min(req.body.max_tokens || 10000, 10000),
+          };
+          
+          // Make request to Together AI
+          const togetherResponse = await axios({
+            method: 'POST',
+            url: 'https://api.together.xyz/v1/chat/completions',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${togetherApiKey}`
+            },
+            data: togetherRequestData,
+            timeout: 15000
+          });
+          
+          console.log('Successfully fell back to Together AI API');
+          
+          // Return the Together AI response directly
+          return res.status(200).json(togetherResponse.data);
+        } catch (fallbackError) {
+          console.error('Fallback to Together AI also failed:', fallbackError.message);
+          // Continue to return the original Claude API error
+        }
       }
       
       return res.status(errorStatus).json({
