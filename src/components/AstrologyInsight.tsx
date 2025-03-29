@@ -267,33 +267,37 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                                      insight.message.match(/Place of Birth:?\s*(.+?)(?:\r?\n|$)/i);
                   
                   // Clean the extracted values to remove "of Birth:" prefix and ensure fallbacks
-                  let name = nameMatch ? nameMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : 'Unknown';
+                  let name = nameMatch ? nameMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : '';
                   let date = dateMatch ? dateMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : 'June 15, 2000';
                   let time = timeMatch ? timeMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : '10:15 AM';
                   let place = placeMatch ? placeMatch[1].trim().replace(/^of\s+Birth:\s*/i, '') : 'Morena, MP, India';
                   
-                  // Fallback to extracting directly from the first few lines if everything is still empty
-                  if (name === 'Unknown' && date === 'June 15, 2000' && time === '10:15 AM' && place === 'Morena, MP, India') {
-                    // Try extracting from first few lines of the message
-                    const firstLines = insight.message.split('\n').slice(0, 5).join('\n');
+                  // Fallback to extracting directly from the first few lines if name is still empty
+                  if (!name) {
+                    // Try to find name in message context with improved patterns
+                    const contextNameMatch = insight.message.match(/reading for ([^(,\n]+)/i) || 
+                                           insight.message.match(/chart(?:\s+reading)? for ([^(,\n]+)/i) ||
+                                           insight.message.match(/(?:individual|person|native) named ([^(,\n]+)/i);
                     
-                    // Try to find name in message context
-                    const contextNameMatch = insight.message.match(/reading for ([^(,\n]+)/i);
                     if (contextNameMatch) {
                       name = contextNameMatch[1].trim();
                     }
-                    
-                    // Try to find date, time, place from context
+                  }
+                  
+                  // Further extraction from birth context if still empty
+                  if (!name) {
                     const contextDetailsMatch = insight.message.match(/born(?:\s+on)?\s+([^,]+)(?:,|\s+at\s+)([^,]+)(?:,|\s+in\s+)([^.\n]+)/i);
                     if (contextDetailsMatch) {
-                      date = contextDetailsMatch[1].trim();
-                      time = contextDetailsMatch[2].trim();
-                      place = contextDetailsMatch[3].trim();
+                      // If name still missing but we have birth details, date and time might be available
+                      if (!date || date === 'June 15, 2000') date = contextDetailsMatch[1].trim();
+                      if (!time || time === '10:15 AM') time = contextDetailsMatch[2].trim();
+                      if (!place || place === 'Morena, MP, India') place = contextDetailsMatch[3].trim();
                     }
                   }
                   
                   console.log(`Extracted Birth Details - Name: ${name}, Date: ${date}, Time: ${time}, Place: ${place}`);
                   
+                  // Only render the name section if we have a name
                   return (
                     <motion.div 
                       initial={{ opacity: 0, y: 20 }}

@@ -242,17 +242,20 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
   
   // Extract the name from birth details
   const extractName = (): string => {
+    // Try different patterns to find the name
     const nameMatch = insight.message.match(/Name:?\s*([^\n]+)/i) || 
-                      insight.message.match(/reading for\s+([^(,.\n]+)/i);
+                      insight.message.match(/reading for\s+([^(,.\n]+)/i) ||
+                      insight.message.match(/chart(?:\s+reading)? for ([^(,.\n]+)/i) ||
+                      insight.message.match(/(?:individual|person|native) named ([^(,.\n]+)/i);
     
     const extractedName = nameMatch ? nameMatch[1].trim() : '';
     
-    // Use a proper display name - never empty, no apostrophe issues
-    return extractedName || 'Your';
+    // Use a proper display name - never empty, remove spaces/special chars
+    return extractedName ? extractedName.replace(/[*•-]/g, '').trim() : 'Your';
   };
   
   const name = extractName();
-  // Ensure no apostrophe in possessive 
+  // Ensure no apostrophe in possessive for "Your"
   const displayPossessive = name === 'Your' ? 'Your' : `${name}'s`;
   
   // Extract personality overview
@@ -813,22 +816,12 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                   }}>
                     <Typography sx={{ 
-                      color: 'rgba(255,218,121,0.9)', 
-                      fontSize: '0.85rem', 
-                      mb: 0.5,
-                      fontWeight: 600,
-                      letterSpacing: '0.05em',
-                      fontFamily: '"Courier New", Courier, monospace'
-                    }}>
-                      SUN
-                    </Typography>
-                    <Typography sx={{ 
                       color: 'white', 
                       fontWeight: 600, 
                       fontSize: '1.1rem',
                       textShadow: '0 0 8px rgba(255,193,7,0.4)'
                     }}>
-                      {displaySunSign}
+                      Sun - {displaySunSign}
                     </Typography>
                   </Box>
                   
@@ -844,22 +837,12 @@ const ShareCard: React.FC<ShareCardProps> = ({ insight }) => {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                   }}>
                     <Typography sx={{ 
-                      color: 'rgba(120,160,255,0.9)', 
-                      fontSize: '0.85rem', 
-                      mb: 0.5,
-                      fontWeight: 600,
-                      letterSpacing: '0.05em',
-                      fontFamily: '"Courier New", Courier, monospace'
-                    }}>
-                      MOON
-                    </Typography>
-                    <Typography sx={{ 
                       color: 'white', 
                       fontWeight: 600, 
                       fontSize: '1.1rem',
                       textShadow: '0 0 8px rgba(120,160,255,0.5)'
                     }}>
-                      {displayMoonSign}
+                      Moon - {displayMoonSign}
                     </Typography>
                   </Box>
                 </Box>
