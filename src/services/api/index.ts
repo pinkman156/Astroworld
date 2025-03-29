@@ -384,7 +384,7 @@ class ApiService {
       }
       
       // Progressive token strategy - start with 2000 tokens and increase if needed
-      let maxTokens = 2000;
+      let maxTokens = 10000;
       let attempt = 0;
       const maxAttempts = 3;
       let responseContent = "";
@@ -473,11 +473,11 @@ class ApiService {
         console.log('Request timed out. Retrying with simpler prompt...');
         
         // Create a simpler version of the prompt that focuses on just key aspects
-        let simplifiedPrompt = `${prompt.split('.')[0]}. Keep it very brief and focused.`;
+        let simplifiedPrompt = `${prompt.split('.')[0]}.`;
         
         // If prompt is a complex astrological reading, ensure we still have structure
         if (prompt.includes('astrological reading')) {
-          simplifiedPrompt = `Generate a concise astrological reading with these exact section headers:
+          simplifiedPrompt = `Generate a detailed astrological reading with these exact section headers:
 
 ## Birth Details
 Date: [Extract from original query if possible]
@@ -527,7 +527,7 @@ IMPORTANT: Use exactly these section headers with ## prefix. Format lists as num
             messages: [
               {
                 role: "system",
-                content: "You are an expert Vedic astrologer. Provide very concise insights. Always use ## prefix for section headers and never use bold formatting or asterisks for headers."
+                content: "You are an expert Vedic astrologer.  Always use ## prefix for section headers and never use bold formatting or asterisks for headers."
               },
               {
                 role: "user",
@@ -910,7 +910,7 @@ Here is the birth chart data: ${JSON.stringify(summarizedChartData)}`;
           // Try with progressive token increase for the fallback
           const fallbackInsight = await this.getAIInsight(
             fallbackPrompt, 
-            "You are an expert Vedic astrologer providing concise birth chart readings. Include ALL requested sections with EXACT headers shown. Be extremely concise.", 
+            "You are an expert Vedic astrologer providing concise birth chart readings. Include ALL requested sections with EXACT headers shown. Give detailed insights.", 
             "comprehensive_fallback"
           );
           
