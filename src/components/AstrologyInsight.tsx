@@ -1755,6 +1755,34 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
         </DialogTitle>
         
         <DialogContent sx={{ p: 3 }}>
+          {/* Coming Soon Badge */}
+          <Box sx={{ 
+            position: 'absolute', 
+            top: 12, 
+            right: 50, 
+            transform: 'rotate(25deg)',
+            zIndex: 10
+          }}>
+            <Box sx={{ 
+              bgcolor: 'rgba(255, 215, 0, 0.9)', 
+              px: 2, 
+              py: 0.5, 
+              borderRadius: 5,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              animation: 'pulse 2s infinite'
+            }}>
+              <Typography sx={{ 
+                color: 'rgba(0, 0, 0, 0.8)', 
+                fontWeight: 700, 
+                fontSize: '0.85rem', 
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase'
+              }}>
+                Coming Soon
+              </Typography>
+            </Box>
+          </Box>
+
           <Box sx={{ mb: 3 }}>
             <Typography variant="h6" sx={{ color: '#FFD700', mb: 1, fontWeight: 600 }}>
               Unlock Your Complete Cosmic Potential
@@ -1770,7 +1798,17 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
             </Typography>
             
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Paper sx={{ p: 2, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 2 }}>
+              <Paper sx={{ 
+                p: 2, 
+                bgcolor: 'rgba(255, 255, 255, 0.1)', 
+                borderRadius: 2,
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.15)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 5px 15px rgba(0,0,0,0.2)'
+                }
+              }}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
                   <Box sx={{ 
                     width: 28, 
@@ -1796,7 +1834,17 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                 </Box>
               </Paper>
               
-              <Paper sx={{ p: 2, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 2 }}>
+              <Paper sx={{ 
+                p: 2, 
+                bgcolor: 'rgba(255, 255, 255, 0.1)', 
+                borderRadius: 2,
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.15)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 5px 15px rgba(0,0,0,0.2)'
+                }
+              }}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
                   <Box sx={{ 
                     width: 28, 
@@ -1822,7 +1870,17 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
                 </Box>
               </Paper>
               
-              <Paper sx={{ p: 2, bgcolor: 'rgba(255, 255, 255, 0.1)', borderRadius: 2 }}>
+              <Paper sx={{ 
+                p: 2, 
+                bgcolor: 'rgba(255, 255, 255, 0.1)', 
+                borderRadius: 2,
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.15)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 5px 15px rgba(0,0,0,0.2)'
+                }
+              }}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
                   <Box sx={{ 
                     width: 28, 
@@ -1849,20 +1907,56 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
               </Paper>
             </Box>
           </Box>
+
+          {/* Early Access Notification */}
+          <Box sx={{ 
+            mb: 2, 
+            mt: 3,
+            p: 2, 
+            borderRadius: 2,
+            background: 'linear-gradient(45deg, rgba(255,215,0,0.15), rgba(255,165,0,0.15))',
+            border: '1px dashed rgba(255,215,0,0.3)',
+          }}>
+            <Typography variant="subtitle2" sx={{ 
+              color: '#FFD700', 
+              display: 'flex', 
+              alignItems: 'center', 
+              fontWeight: 600,
+              mb: 1
+            }}>
+              <Box component="span" sx={{ 
+                display: 'inline-flex', 
+                mr: 1,
+                animation: 'glow 1.5s ease-in-out infinite alternate'
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M19 9l-7 7-7-7" stroke="#FFD700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </Box>
+              Join the Waitlist
+            </Typography>
+            <Typography sx={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.9rem' }}>
+              Be among the first to experience Astro Insights PRO. Sign up now to receive early access and an exclusive discount when we launch!
+            </Typography>
+          </Box>
         </DialogContent>
         
-        <DialogActions sx={{ p: 2.5, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+        <DialogActions sx={{ 
+          p: 2.5, 
+          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+          display: 'flex',
+          justifyContent: 'space-between'
+        }}>
           <Button 
             onClick={handleProDialogClose} 
             sx={{ 
               color: 'rgba(255, 255, 255, 0.7)', 
-              mr: 1,
               '&:hover': {
                 color: 'white'
               }
             }}
           >
-            Not Now
+            Remind Me Later
           </Button>
           <Button 
             variant="contained" 
@@ -1873,10 +1967,14 @@ const AstrologyInsight: React.FC<AstrologyInsightProps> = ({ insight }) => {
               px: 3,
               '&:hover': {
                 background: 'linear-gradient(45deg, #FFB700, #FF8C00)',
-              }
+                transform: 'translateY(-2px)',
+                boxShadow: '0 4px 12px rgba(255,165,0,0.4)'
+              },
+              transition: 'all 0.3s ease'
             }}
           >
-            Upgrade to PRO
+            <StarIcon sx={{ mr: 1, fontSize: '0.9rem' }} />
+            Join Waitlist
           </Button>
         </DialogActions>
       </Dialog>
